@@ -1,0 +1,226 @@
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromUrl } from '../api/claudeClient';
+import { buildTree, type BuiltTree, type TreeNode } from '../tree/buildTree';
+import { GraphCanvas } from './GraphCanvas';
+import { watchConversation, watchUrl } from '../content/observers';
+import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
+import type { LayoutDirection } from '../tree/layout';
+
+type Status =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; tree: BuiltTree; convId: string }
+  | { kind: 'no-conversation' }
+  | { kind: 'error'; message: string };
+
+const DEFAULT_PANEL_W = 480;
+const MIN_PANEL_W = 320;
+const MAX_PANEL_W_FRAC = 0.7; // never take more than 70% of viewport
+
+function usePagePushRight(open: boolean, width: number) {
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    const prev = html.style.getPropertyValue('--cg-host-push');
+    const prevTransition = html.style.transition;
+    html.style.transition = 'padding-right 180ms ease';
+    html.style.paddingRight = `${width}px`;
+    html.style.boxSizing = 'border-box';
+    return () => {
+      html.style.paddingRight = '';
+      html.style.transition = prevTransition;
+      if (prev) html.style.setProperty('--cg-host-push', prev);
+    };
+  }, [open, width]);
+}
+
+export function App() {
+  const [open, setOpen] = useState(false);
+  const [panelW, setPanelW] = useState(DEFAULT_PANEL_W);
+  const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [direction, setDirection] = useState<LayoutDirection>('TB');
+  const [anchor, setAnchor] = useState<AnchorPosition | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const orgIdRef = useRef<string | null>(null);
+  const reqRef = useRef(0);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+
+  usePagePushRight(open, panelW);
+
+  // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
+  // scroll, layout shifts, and on panel open/close (because the composer moves
+  // when claude.ai's content shifts left).
+  useEffect(() => {
+    if (!toggleRef.current) return;
+    return trackComposerAnchor(toggleRef.current, setAnchor);
+  }, [open, panelW]);
+
+  const load = useCallback(async () => {
+    const convId = parseConversationIdFromUrl();
+    if (!convId) {
+      setStatus({ kind: 'no-conversation' });
+      return;
+    }
+    const req = ++reqRef.current;
+    // Keep the cached tree on screen during a same-chat refresh (avoids
+    // flicker), but force a loading state when the cached tree belongs to a
+    // different conversation — otherwise we'd briefly show the previous
+    // chat's nodes while the new one fetches.
+    setStatus((s) => (s.kind === 'ready' && s.convId === convId ? s : { kind: 'loading' }));
+    try {
+      if (!orgIdRef.current) orgIdRef.current = await getOrgId();
+      const conv = await getConversationTree(orgIdRef.current, convId);
+      if (req !== reqRef.current) return;
+      const tree = buildTree(conv);
+      setStatus({ kind: 'ready', tree, convId });
+    } catch (e) {
+      if (req !== reqRef.current) return;
+      const msg = e instanceof ClaudeApiError
+        ? e.status === 403 || e.status === 401
+          ? 'Not authenticated to claude.ai. Reload the tab and sign in.'
+          : `claude.ai API error: ${e.status}`
+        : e instanceof Error
+          ? e.message
+          : 'Unknown error loading conversation';
+      setStatus({ kind: 'error', message: msg });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    // Capture the conv we opened against — switching to a different chat closes
+    // the panel (Option 1 by user request). Query-string-only changes on the
+    // same conv are ignored.
+    const initialConvId = parseConversationIdFromUrl();
+    void load();
+    const unwatchUrl = watchUrl(() => {
+      const cur = parseConversationIdFromUrl();
+      if (cur !== initialConvId) {
+        setOpen(false);
+      }
+    });
+    // Same-chat updates (new message, edit) still refresh the graph — cheap and
+    // keeps the tree in sync while you're working in one conversation.
+    const unwatchConv = watchConversation(() => void load(), 800);
+    return () => {
+      unwatchUrl();
+      unwatchConv();
+    };
+  }, [open, load]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && open) setOpen(false);
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open]);
+
+  const handleNodeClick = useCallback((node: TreeNode) => {
+    // Phase A (M2): walk native < / > arrows to jump to this branch.
+    // For now we just keep the panel open — the user can already see/hover.
+    void node;
+  }, []);
+
+  // Resize handle drag
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const startX = e.clientX;
+    const startW = panelW;
+    const maxW = Math.floor(window.innerWidth * MAX_PANEL_W_FRAC);
+    const prevUserSelect = document.body.style.userSelect;
+    const prevCursor = document.body.style.cursor;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(MIN_PANEL_W, Math.min(maxW, startW + (startX - ev.clientX)));
+      setPanelW(next);
+    };
+    const onUp = () => {
+      setDragging(false);
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.cursor = prevCursor;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [panelW]);
+
+  // Style the toggle from anchor coords
+  const toggleStyle: React.CSSProperties = anchor
+    ? {
+        ['--cg-toggle-x' as never]: `${anchor.x}px`,
+        ['--cg-toggle-y' as never]: `${anchor.y}px`,
+        ['--cg-toggle-vis' as never]: anchor.visible ? 'visible' : 'hidden',
+      }
+    : { ['--cg-toggle-vis' as never]: 'hidden' };
+
+  return (
+    <>
+      <button
+        ref={toggleRef}
+        className="cg-toggle"
+        data-on={open ? 'true' : 'false'}
+        data-hidden={open ? 'true' : 'false'}
+        onClick={() => setOpen((v) => !v)}
+        title="Open graph mode (⌘⇧G)"
+        style={toggleStyle}
+        aria-hidden={open}
+      >
+        <span className="cg-dot" />
+        Graph
+      </button>
+      {open && (
+        <aside
+          className="cg-panel"
+          role="complementary"
+          aria-label="Conversation graph"
+          style={{ ['--cg-panel-w' as never]: `${panelW}px` }}
+        >
+          <div
+            className="cg-resize"
+            data-dragging={dragging ? 'true' : 'false'}
+            onMouseDown={onResizeStart}
+            title="Drag to resize"
+          />
+          <div className="cg-toolbar">
+            <h1>Conversation graph</h1>
+            <div className="cg-spacer" />
+            <button onClick={() => setDirection((d) => (d === 'TB' ? 'LR' : 'TB'))} title="Switch orientation">
+              {direction === 'TB' ? '↓' : '→'}
+            </button>
+            <button onClick={() => void load()} title="Refresh">↻</button>
+            <button onClick={() => setOpen(false)} title="Close (Esc)">✕</button>
+          </div>
+          <div className="cg-toolbar" style={{ borderTop: 0, paddingTop: 0 }}>
+            <span className="cg-status">
+              {status.kind === 'loading' && 'Loading…'}
+              {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}
+              {status.kind === 'no-conversation' && 'Open a chat to see its tree'}
+              {status.kind === 'error' && status.message}
+            </span>
+          </div>
+          {status.kind === 'ready' ? (
+            <GraphCanvas tree={status.tree} direction={direction} onNodeClick={handleNodeClick} />
+          ) : (
+            <div className="cg-empty">
+              {status.kind === 'loading'
+                ? 'Loading conversation tree…'
+                : status.kind === 'no-conversation'
+                  ? 'Open any chat on claude.ai, then press ⌘⇧G.'
+                  : status.kind === 'error'
+                    ? status.message
+                    : ''}
+            </div>
+          )}
+        </aside>
+      )}
+    </>
+  );
+}

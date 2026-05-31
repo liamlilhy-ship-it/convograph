@@ -1,0 +1,41 @@
+{
+  "uuid": "conv-edit",
+  "current_leaf_message_uuid": "m4b",
+  "chat_messages": [
+    {
+      "uuid": "m1",
+      "parent_message_uuid": null,
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Pick a color" }],
+      "created_at": "2026-05-27T10:00:00Z"
+    },
+    {
+      "uuid": "m2",
+      "parent_message_uuid": "m1",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Sure — red" }],
+      "created_at": "2026-05-27T10:00:01Z"
+    },
+    {
+      "uuid": "m3a",
+      "parent_message_uuid": "m2",
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Why red?" }],
+      "created_at": "2026-05-27T10:00:02Z"
+    },
+    {
+      "uuid": "m3b",
+      "parent_message_uuid": "m2",
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Pick something cooler" }],
+      "created_at": "2026-05-27T10:00:05Z"
+    },
+    {
+      "uuid": "m4b",
+      "parent_message_uuid": "m3b",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Indigo" }],
+      "created_at": "2026-05-27T10:00:06Z"
+    }
+  ]
+}
