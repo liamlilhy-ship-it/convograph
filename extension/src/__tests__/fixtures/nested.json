@@ -1,0 +1,55 @@
+{
+  "uuid": "conv-nested",
+  "current_leaf_message_uuid": "a4",
+  "chat_messages": [
+    {
+      "uuid": "h1",
+      "parent_message_uuid": null,
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Hello" }],
+      "created_at": "2026-05-27T10:00:00Z"
+    },
+    {
+      "uuid": "a1",
+      "parent_message_uuid": "h1",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Hi! How can I help?" }],
+      "created_at": "2026-05-27T10:00:01Z"
+    },
+    {
+      "uuid": "h2a",
+      "parent_message_uuid": "a1",
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Tell me about cats" }],
+      "created_at": "2026-05-27T10:00:02Z"
+    },
+    {
+      "uuid": "a2a",
+      "parent_message_uuid": "h2a",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Cats are great." }],
+      "created_at": "2026-05-27T10:00:03Z"
+    },
+    {
+      "uuid": "h2b",
+      "parent_message_uuid": "a1",
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Tell me about dogs" }],
+      "created_at": "2026-05-27T10:00:04Z"
+    },
+    {
+      "uuid": "a3",
+      "parent_message_uuid": "h2b",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Dogs are great." }],
+      "created_at": "2026-05-27T10:00:05Z"
+    },
+    {
+      "uuid": "a4",
+      "parent_message_uuid": "h2b",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Dogs are loyal companions." }],
+      "created_at": "2026-05-27T10:00:06Z"
+    }
+  ]
+}

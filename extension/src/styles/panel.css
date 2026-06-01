@@ -130,17 +130,26 @@
     var(--cg-bg);
 }
 
-/* Node card */
+/* React Flow disables pointer events on nodes unless they're selectable/
+   draggable (we turn both off). Re-enable so clicks/hovers reach our cards
+   instead of falling through to the pane (which would just pan the canvas). */
+.react-flow__node { pointer-events: auto; }
+
+/* Node card — split Q (top) / A (bottom) */
 .cg-node {
-  width: 260px;
+  width: 300px;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border);
   border-radius: 10px;
-  padding: 10px 12px;
   box-shadow: var(--cg-shadow);
   font-size: 12px;
   line-height: 1.4;
   cursor: pointer;
+  overflow: hidden;
+  pointer-events: auto;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 .cg-node:hover { border-color: var(--cg-accent); }
@@ -148,33 +157,206 @@
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
 }
-.cg-node .cg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.cg-node[data-pending="true"] .cg-half-a { opacity: 0.78; }
+
+/* Halves are flex columns so media (cg-rich) is pinned and the prose body
+   shrinks first — media is never clipped by the card's max-height. */
+.cg-node .cg-half {
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.cg-node .cg-half-q { padding-bottom: 7px; flex: 0 0 auto; }
+.cg-node .cg-half-a { padding-top: 7px; flex: 1 1 auto; min-height: 0; }
+.cg-node .cg-half-a .cg-body { flex: 0 1 auto; min-height: 0; }
+.cg-node .cg-rich { flex: 0 0 auto; }
+.cg-node .cg-divider {
+  height: 1px;
+  background: var(--cg-border);
+}
+
+.cg-node .cg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
 .cg-node .cg-tag {
   font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--cg-fg-muted);
 }
-.cg-node[data-sender="human"] .cg-tag { color: var(--cg-accent); }
+.cg-node .cg-tag-q { color: var(--cg-accent); }
+.cg-node .cg-tag-a { color: var(--cg-fg-muted); }
 .cg-node .cg-pip {
   font-size: 10px;
   color: var(--cg-fg-muted);
   margin-left: auto;
   font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--cg-border);
 }
 .cg-node .cg-snippet {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
 }
+/* Question half: keep a few lines of context. Answer half: longer body. */
+.cg-node .cg-title { -webkit-line-clamp: 4; font-weight: 500; }
+.cg-node .cg-body { -webkit-line-clamp: 4; opacity: 0.92; }
+/* When this turn's Q is shared with siblings (regenerate), dim slightly */
+.cg-node .cg-snippet[data-shared="true"] { opacity: 0.72; }
 
-/* Hover preview */
+/* Sibling-diff highlight (regenerate case). Keep calm: subtle bg, no underline. */
+.cg-node mark.cg-diff,
+.cg-preview mark.cg-diff {
+  background: var(--cg-accent-soft);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+/* Rich content previews (code / table / list / links / badges) */
+.cg-node .cg-rich {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 7px;
+}
+.cg-node .cg-muted { color: var(--cg-fg-muted); }
+
+/* Code snippet */
+.cg-node .cg-code {
+  border: 1px solid var(--cg-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cg-node .cg-code-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  color: var(--cg-fg-muted);
+  border-bottom: 1px solid var(--cg-border);
+}
+.cg-node .cg-code-body {
+  margin: 0;
+  padding: 5px 7px;
+  font-family: var(--cg-font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: pre;
+  overflow: hidden;
+  max-height: 48px;
+}
+
+/* Table preview */
+.cg-node .cg-tablep {
+  border: 1px solid var(--cg-border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 10px;
+}
+.cg-node .cg-tablep-head {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cg-node .cg-tablep-cell {
+  font-weight: 600;
+  padding: 0 4px;
+  border-bottom: 2px solid var(--cg-border-strong);
+}
+
+/* List preview */
+.cg-node .cg-listp {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.cg-node .cg-listp li { word-break: break-word; }
+
+/* Link list */
+.cg-node .cg-links { display: flex; flex-direction: column; gap: 2px; }
+.cg-node .cg-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cg-node .cg-link svg { flex-shrink: 0; }
+.cg-node .cg-link-text { overflow: hidden; text-overflow: ellipsis; }
+.cg-node .cg-link-host { flex-shrink: 0; font-size: 10px; }
+
+/* Single-line badge (image / attachment fallback) */
+.cg-node .cg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--cg-border);
+  color: var(--cg-fg-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.cg-node .cg-badge svg { flex-shrink: 0; }
+
+/* Image thumbnails */
+.cg-node .cg-thumbs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.cg-node .cg-thumb {
+  display: block;
+  width: 56px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--cg-border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.cg-node .cg-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* File badges (filename + type/size; clickable when a URL exists) */
+.cg-node .cg-files { display: flex; flex-direction: column; gap: 3px; }
+.cg-node .cg-file {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px solid var(--cg-border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+}
+a.cg-file:hover { border-color: var(--cg-accent); }
+.cg-node .cg-file svg { flex-shrink: 0; color: var(--cg-fg-muted); }
+.cg-node .cg-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-node .cg-file-meta { flex-shrink: 0; font-size: 10px; }
+
+/* Hover preview — Q on top, A on bottom */
 .cg-preview {
   position: fixed;
   z-index: 2147483647;
-  max-width: 380px;
-  max-height: 340px;
+  width: 400px;
+  max-height: 420px;
   overflow: auto;
   padding: 12px 14px;
   background: var(--cg-bg-elev);
@@ -186,6 +368,23 @@
   white-space: pre-wrap;
   pointer-events: none;
 }
+.cg-preview-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.62;
+  margin-bottom: 4px;
+}
+.cg-preview-body {
+  margin-bottom: 10px;
+  word-break: break-word;
+}
+.cg-preview-divider {
+  height: 1px;
+  background: var(--cg-border);
+  margin: 0 -14px 10px;
+}
 
 .cg-empty {
   display: flex;
@@ -194,6 +393,37 @@
   height: 100%;
   color: var(--cg-fg-muted);
   font-size: 13px;
+}
+
+/* Node being switched to — brief pulse while the PUT + re-render happen. */
+.cg-node[data-jumping="true"] {
+  border-color: var(--cg-accent);
+  animation: cg-pulse 900ms ease-in-out infinite;
+}
+@keyframes cg-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--cg-accent-soft), var(--cg-shadow); }
+  50% { box-shadow: 0 0 0 4px var(--cg-accent-soft), var(--cg-shadow); }
+}
+
+/* Toast — transient status (jump errors, "reload to see it"). */
+.cg-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  max-width: 90%;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--cg-fg);
+  color: var(--cg-bg);
+  font-size: 12px;
+  box-shadow: var(--cg-shadow);
+  z-index: 3;
+  animation: cg-toast-in 160ms ease-out;
+}
+@keyframes cg-toast-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 /* React Flow overrides — keep the rendering clean */

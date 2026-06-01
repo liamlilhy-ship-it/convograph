@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromUrl } from '../api/claudeClient';
-import { buildTree, type BuiltTree, type TreeNode } from '../tree/buildTree';
+import { buildTree } from '../tree/buildTree';
+import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
+import { jumpToNode } from '../navigation/jumpToNode';
 import type { LayoutDirection } from '../tree/layout';
 
 type Status =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ready'; tree: BuiltTree; convId: string }
+  | { kind: 'ready'; tree: DisplayTree; convId: string }
   | { kind: 'no-conversation' }
   | { kind: 'error'; message: string };
 
@@ -41,6 +43,8 @@ export function App() {
   const [direction, setDirection] = useState<LayoutDirection>('TB');
   const [anchor, setAnchor] = useState<AnchorPosition | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [jumping, setJumping] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const orgIdRef = useRef<string | null>(null);
   const reqRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
@@ -71,7 +75,7 @@ export function App() {
       if (!orgIdRef.current) orgIdRef.current = await getOrgId();
       const conv = await getConversationTree(orgIdRef.current, convId);
       if (req !== reqRef.current) return;
-      const tree = buildTree(conv);
+      const tree = buildDisplayTree(buildTree(conv));
       setStatus({ kind: 'ready', tree, convId });
     } catch (e) {
       if (req !== reqRef.current) return;
@@ -108,6 +112,13 @@ export function App() {
     };
   }, [open, load]);
 
+  // Auto-dismiss the toast.
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(id);
+  }, [toast]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && open) setOpen(false);
@@ -120,11 +131,31 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open]);
 
-  const handleNodeClick = useCallback((node: TreeNode) => {
-    // Phase A (M2): walk native < / > arrows to jump to this branch.
-    // For now we just keep the panel open — the user can already see/hover.
-    void node;
-  }, []);
+  const handleNodeClick = useCallback(
+    async (node: DisplayNode) => {
+      const convId = parseConversationIdFromUrl();
+      const orgId = orgIdRef.current;
+      if (!convId || !orgId) return;
+      if (node.isOnActivePath) {
+        // Already active — just scroll the left chat to it.
+        void jumpToNode(orgId, convId, node);
+        return;
+      }
+      setJumping(node.id);
+      const result = await jumpToNode(orgId, convId, node);
+      setJumping(null);
+      if (!result.ok) {
+        setToast(result.error ?? 'Could not switch branch');
+        return;
+      }
+      if (!result.refreshed) {
+        setToast('Branch set — reload the chat to see it');
+      }
+      // Re-fetch so the graph's active-path highlight follows the jump.
+      void load();
+    },
+    [load],
+  );
 
   // Resize handle drag
   const onResizeStart = useCallback((e: React.MouseEvent) => {
@@ -207,7 +238,12 @@ export function App() {
             </span>
           </div>
           {status.kind === 'ready' ? (
-            <GraphCanvas tree={status.tree} direction={direction} onNodeClick={handleNodeClick} />
+            <GraphCanvas
+              tree={status.tree}
+              direction={direction}
+              onNodeClick={handleNodeClick}
+              jumpingId={jumping}
+            />
           ) : (
             <div className="cg-empty">
               {status.kind === 'loading'
@@ -219,6 +255,7 @@ export function App() {
                     : ''}
             </div>
           )}
+          {toast && <div className="cg-toast">{toast}</div>}
         </aside>
       )}
     </>

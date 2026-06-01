@@ -39,4 +39,67 @@ describe('buildTree', () => {
     expect(t.byId.get('m3a')!.depth).toBe(2);
     expect(t.byId.get('m4b')!.depth).toBe(3);
   });
+
+  it('merges media from files_v2, legacy files, and attachments without dupes', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'h1',
+      chat_messages: [
+        {
+          uuid: 'h1',
+          parent_message_uuid: null,
+          sender: 'human',
+          created_at: '2026-05-27T10:00:00Z',
+          content: [{ type: 'text', text: 'See attached' }],
+          files_v2: [
+            { file_kind: 'image', file_uuid: 'img1', file_name: 'a.png', thumbnail_url: '/api/t/1', preview_url: '/api/p/1' },
+            { file_kind: 'document', file_uuid: 'doc1', file_name: 'report.pdf', file_size_bytes: 2048 },
+          ],
+          // legacy `files` repeats the same image (must dedupe by uuid)
+          files: [
+            { file_kind: 'image', file_uuid: 'img1', file_name: 'a.png', thumbnail_url: '/api/t/1' },
+          ],
+          attachments: [{ file_uuid: 'att1', file_name: 'notes.txt', file_type: 'text/plain', file_size: 100 }],
+        },
+      ],
+    };
+    const kinds = buildTree(conv).byId.get('h1')!.preview.kinds;
+    const img = kinds.find((k) => k.kind === 'image');
+    const att = kinds.find((k) => k.kind === 'attachment');
+    expect(img && img.kind === 'image' ? img.images.length : 0).toBe(1); // deduped
+    expect(img && img.kind === 'image' ? img.images[0]?.thumbUrl : '').toBe('/api/t/1');
+    expect(att && att.kind === 'attachment' ? att.files.map((f) => f.name).sort() : []).toEqual(
+      ['notes.txt', 'report.pdf'],
+    );
+  });
+
+  it('reads claude.ai legacy `files` shape (uuid key, file_kind image/blob, size_bytes)', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'h1',
+      chat_messages: [
+        {
+          uuid: 'h1',
+          parent_message_uuid: null,
+          sender: 'human',
+          created_at: '2026-05-27T10:00:00Z',
+          content: [{ type: 'text', text: 'see files' }],
+          files: [
+            { file_kind: 'image', uuid: 'i1', file_name: 'pg-1.jpg', thumbnail_url: '/api/x/thumbnail', preview_url: '/api/x/preview' },
+            { file_kind: 'blob', uuid: 'b1', file_name: 'Dev doc.md', size_bytes: 4096 },
+          ],
+        },
+      ],
+    };
+    const kinds = buildTree(conv).byId.get('h1')!.preview.kinds;
+    const img = kinds.find((k) => k.kind === 'image');
+    const att = kinds.find((k) => k.kind === 'attachment');
+    expect(img && img.kind === 'image' ? img.images[0]?.thumbUrl : '').toBe('/api/x/thumbnail');
+    // blob doc is shown as a file, type derived from extension (not "blob")
+    if (att && att.kind === 'attachment') {
+      expect(att.files[0]?.name).toBe('Dev doc.md');
+      expect(att.files[0]?.type).toBe('md');
+      expect(att.files[0]?.size).toBe(4096);
+    }
+  });
 });

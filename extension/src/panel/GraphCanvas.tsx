@@ -1,14 +1,23 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { ReactFlow, Background, Controls, type Node, type Edge, ReactFlowProvider } from '@xyflow/react';
-import type { BuiltTree, TreeNode } from '../tree/buildTree';
+import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard } from './NodeCard';
 import { HoverPreview } from './HoverPreview';
 
+type CgNodeData = {
+  node: DisplayNode;
+  jumping: boolean;
+  onHoverStart: (n: DisplayNode, r: DOMRect) => void;
+  onHoverEnd: () => void;
+  onClick: (n: DisplayNode) => void;
+};
+
 const NODE_TYPES = {
-  cgNode: ({ data }: { data: { node: TreeNode; onHoverStart: (n: TreeNode, r: DOMRect) => void; onHoverEnd: () => void; onClick: (n: TreeNode) => void } }) => (
+  cgNode: ({ data }: { data: CgNodeData }) => (
     <NodeCard
       node={data.node}
+      jumping={data.jumping}
       onHoverStart={data.onHoverStart}
       onHoverEnd={data.onHoverEnd}
       onClick={data.onClick}
@@ -17,17 +26,17 @@ const NODE_TYPES = {
 };
 
 export type GraphCanvasProps = {
-  tree: BuiltTree;
+  tree: DisplayTree;
   direction?: LayoutDirection;
-  onNodeClick: (node: TreeNode) => void;
+  onNodeClick: (node: DisplayNode) => void;
+  jumpingId?: string | null;
 };
 
-export function GraphCanvas({ tree, direction = 'TB', onNodeClick }: GraphCanvasProps) {
-  const [hover, setHover] = useState<{ node: TreeNode; anchor: DOMRect } | null>(null);
+export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: GraphCanvasProps) {
+  const [hover, setHover] = useState<{ node: DisplayNode; anchor: DOMRect } | null>(null);
   const hoverTimer = useRef<number | null>(null);
 
-  // When the tree identity changes (e.g. user switched chats and re-opened),
-  // drop any lingering hover preview — its node reference is stale.
+  // When the tree identity changes (chat switch, refetch), drop any stale hover.
   useEffect(() => {
     if (hoverTimer.current != null) {
       clearTimeout(hoverTimer.current);
@@ -36,7 +45,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick }: GraphCanvas
     setHover(null);
   }, [tree]);
 
-  const handleHoverStart = useCallback((node: TreeNode, anchor: DOMRect) => {
+  const handleHoverStart = useCallback((node: DisplayNode, anchor: DOMRect) => {
     if (hoverTimer.current != null) {
       clearTimeout(hoverTimer.current);
       hoverTimer.current = null;
@@ -58,7 +67,13 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick }: GraphCanvas
       id: n.id,
       type: 'cgNode',
       position: { x: n.x, y: n.y },
-      data: { node: n, onHoverStart: handleHoverStart, onHoverEnd: handleHoverEnd, onClick: onNodeClick },
+      data: {
+        node: n,
+        jumping: jumpingId === n.id,
+        onHoverStart: handleHoverStart,
+        onHoverEnd: handleHoverEnd,
+        onClick: onNodeClick,
+      },
       draggable: false,
       selectable: false,
     }));
@@ -73,7 +88,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick }: GraphCanvas
       type: 'smoothstep',
     }));
     return { nodes: rfNodes, edges: rfEdges };
-  }, [tree, direction, handleHoverStart, handleHoverEnd, onNodeClick]);
+  }, [tree, direction, jumpingId, handleHoverStart, handleHoverEnd, onNodeClick]);
 
   return (
     <div className="cg-canvas">

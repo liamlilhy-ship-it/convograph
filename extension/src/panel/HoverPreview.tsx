@@ -1,20 +1,29 @@
-import type { TreeNode } from '../tree/buildTree';
+import type { DisplayNode } from '../tree/displayTree';
 
 export type HoverPreviewProps = {
-  node: TreeNode;
+  node: DisplayNode;
   anchor: DOMRect;
 };
 
 export function HoverPreview({ node, anchor }: HoverPreviewProps) {
   const PAD = 8;
-  const left = Math.min(window.innerWidth - 400, anchor.right + PAD);
-  const top = Math.min(window.innerHeight - 360, anchor.top);
+  const left = Math.min(window.innerWidth - 420, anchor.right + PAD);
+  const top = Math.min(window.innerHeight - 420, anchor.top);
   return (
     <div className="cg-preview" style={{ left, top }}>
-      <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.55, marginBottom: 6 }}>
-        {node.sender === 'human' ? 'You' : 'Claude'}
+      <div className="cg-preview-label">You</div>
+      <div className="cg-preview-body">
+        {node.humanFullText || <em style={{ opacity: 0.55 }}>(no text)</em>}
       </div>
-      {node.fullText || <em style={{ opacity: 0.55 }}>(no text content)</em>}
+      <div className="cg-preview-divider" />
+      <div className="cg-preview-label">Claude</div>
+      <div className="cg-preview-body">
+        {node.assistantId == null ? (
+          <em style={{ opacity: 0.55 }}>awaiting response…</em>
+        ) : (
+          node.assistantFullText || <em style={{ opacity: 0.55 }}>(no text)</em>
+        )}
+      </div>
     </div>
   );
 }

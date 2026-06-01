@@ -40,6 +40,30 @@ export async function getConversationTree(
   return getJson<ApiConversation>(path);
 }
 
+/**
+ * Sets the active branch of a conversation by pointing its current leaf at
+ * `leafUuid`. This is the exact call claude.ai's native `<`/`>` version
+ * arrows make. Updates the server only — the SPA must be told to re-render
+ * separately (see navigation/jumpToNode.ts).
+ */
+export async function setCurrentLeaf(
+  orgId: string,
+  convId: string,
+  leafUuid: string,
+): Promise<void> {
+  const path = `/organizations/${orgId}/chat_conversations/${convId}/current_leaf_message_uuid`;
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ current_leaf_message_uuid: leafUuid }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new ClaudeApiError(res.status, `PUT ${path} -> ${res.status} ${body.slice(0, 200)}`);
+  }
+}
+
 export function parseConversationIdFromUrl(href: string = window.location.href): string | null {
   const m = href.match(/\/chat\/([0-9a-f-]{36})/i);
   return m?.[1] ?? null;

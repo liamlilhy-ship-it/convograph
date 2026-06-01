@@ -1,8 +1,6 @@
 import dagre from 'dagre';
-import type { TreeNode } from './buildTree';
 
-export type LaidOutNode = TreeNode & { x: number; y: number };
-
+export type Layoutable = { id: string; parentId: string | null };
 export type LayoutDirection = 'TB' | 'LR';
 
 export type LayoutOptions = {
@@ -13,16 +11,19 @@ export type LayoutOptions = {
   nodeSep?: number;
 };
 
-export function layoutTree(
-  nodes: TreeNode[],
+export function layoutTree<T extends Layoutable>(
+  nodes: T[],
   opts: LayoutOptions = {},
-): { nodes: LaidOutNode[]; edges: Array<{ id: string; source: string; target: string }> } {
+): {
+  nodes: Array<T & { x: number; y: number }>;
+  edges: Array<{ id: string; source: string; target: string }>;
+} {
   const {
     direction = 'TB',
-    nodeWidth = 260,
-    nodeHeight = 130,
-    rankSep = 70,
-    nodeSep = 40,
+    nodeWidth = 300,
+    nodeHeight = 300,
+    rankSep = 80,
+    nodeSep = 44,
   } = opts;
 
   const g = new dagre.graphlib.Graph();
@@ -42,7 +43,7 @@ export function layoutTree(
 
   dagre.layout(g);
 
-  const laid: LaidOutNode[] = nodes.map((n) => {
+  const laid = nodes.map((n) => {
     const pos = g.node(n.id);
     return { ...n, x: pos.x - nodeWidth / 2, y: pos.y - nodeHeight / 2 };
   });

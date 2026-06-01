@@ -11,6 +11,13 @@
       "js": ["src/content/index.ts"],
       "run_at": "document_idle",
       "all_frames": false
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["src/content/mainWorld.ts"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "world": "MAIN"
     }
   ],
   "action": {
