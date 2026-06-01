@@ -1,22 +1,27 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
-import type { ContentKind } from '../tree/contentKinds';
+import type { ContentKind, WidgetRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import { CodeIcon, ImageIcon, AttachmentIcon, LinkIcon } from './icons';
+import { svgDataUri, type PreviewItem } from './HoverPreview';
 
-export type NodeCardProps = {
+type HoverApi = {
+  onPreview: (item: PreviewItem, rect: DOMRect) => void;
+  onPreviewEnd: () => void;
+};
+
+export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
-  onHoverStart: (node: DisplayNode, rect: DOMRect) => void;
-  onHoverEnd: () => void;
   onClick: (node: DisplayNode) => void;
   style?: CSSProperties;
 };
 
-export function NodeCard({ node, jumping, onHoverStart, onHoverEnd, onClick, style }: NodeCardProps) {
+export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, style }: NodeCardProps) {
   const pending = node.assistantId == null;
   const a = node.assistantPreview;
   const aText = a.body || a.title;
+  const hover: HoverApi = { onPreview, onPreviewEnd };
   return (
     <div
       className="cg-node"
@@ -24,8 +29,6 @@ export function NodeCard({ node, jumping, onHoverStart, onHoverEnd, onClick, sty
       data-pending={pending ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
       style={style}
-      onMouseEnter={(e) => onHoverStart(node, (e.currentTarget as HTMLElement).getBoundingClientRect())}
-      onMouseLeave={onHoverEnd}
       onClick={() => onClick(node)}
     >
       <div className="cg-half cg-half-q">
@@ -61,13 +64,109 @@ export function NodeCard({ node, jumping, onHoverStart, onHoverEnd, onClick, sty
         </div>
         <RichKinds preview={a} />
       </div>
+      <ThumbStrip thumbs={collectThumbs(node.humanPreview, a)} hover={hover} />
+    </div>
+  );
+}
+
+/** A single uniform tile in the bottom thumbnail strip. */
+type Thumb =
+  | { t: 'img'; src: string; href: string; title?: string }
+  | { t: 'svg'; w: WidgetRef }
+  | { t: 'wicon'; w: WidgetRef }   // non-SVG widget: hoverable icon tile
+  | { t: 'imgicon' };              // image block with no thumbnail URL
+
+/** Flatten every image + widget across both halves into one ordered tile list. */
+function collectThumbs(...previews: NodePreview[]): Thumb[] {
+  const out: Thumb[] = [];
+  for (const p of previews) {
+    for (const k of p.kinds) {
+      if (k.kind === 'image') {
+        if (k.images.length) {
+          for (const im of k.images) {
+            out.push({ t: 'img', src: im.thumbUrl, href: im.fullUrl || im.thumbUrl, title: im.name });
+          }
+        } else {
+          out.push({ t: 'imgicon' });
+        }
+      } else if (k.kind === 'widget') {
+        for (const w of k.widgets) out.push(w.isSvg ? { t: 'svg', w } : { t: 'wicon', w });
+      }
+    }
+  }
+  return out;
+}
+
+const MAX_THUMBS = 3;
+
+function ThumbStrip({ thumbs, hover }: { thumbs: Thumb[]; hover: HoverApi }) {
+  if (!thumbs.length) return null;
+  const shown = thumbs.slice(0, MAX_THUMBS);
+  const extra = thumbs.length - shown.length;
+  return (
+    <div className="cg-thumbstrip">
+      {shown.map((th, i) => (
+        <ThumbTile key={i} thumb={th} hover={hover} />
+      ))}
+      {extra > 0 && <span className="cg-muted cg-thumb-more">+{extra}</span>}
+    </div>
+  );
+}
+
+function ThumbTile({ thumb, hover }: { thumb: Thumb; hover: HoverApi }) {
+  if (thumb.t === 'img') {
+    return (
+      <a
+        className="cg-wthumb cg-wthumb-img"
+        href={thumb.href}
+        target="_blank"
+        rel="noreferrer"
+        title={thumb.title || 'image'}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) =>
+          hover.onPreview(
+            { kind: 'image', src: thumb.href, title: thumb.title },
+            (e.currentTarget as HTMLElement).getBoundingClientRect(),
+          )
+        }
+        onMouseLeave={hover.onPreviewEnd}
+      >
+        <img src={thumb.src} alt={thumb.title || ''} loading="lazy" />
+      </a>
+    );
+  }
+  if (thumb.t === 'imgicon') {
+    return (
+      <div className="cg-wthumb cg-wthumb-icon" title="image">
+        <ImageIcon size={22} />
+      </div>
+    );
+  }
+  // svg | wicon — both hoverable widgets
+  const w = thumb.w;
+  return (
+    <div
+      className={thumb.t === 'svg' ? 'cg-wthumb' : 'cg-wthumb cg-wthumb-label'}
+      title={w.title || 'visualization'}
+      onMouseEnter={(e) =>
+        hover.onPreview({ kind: 'widget', widget: w }, (e.currentTarget as HTMLElement).getBoundingClientRect())
+      }
+      onMouseLeave={hover.onPreviewEnd}
+    >
+      {thumb.t === 'svg' ? (
+        <img src={svgDataUri(w.code)} alt={w.title || ''} loading="lazy" />
+      ) : w.title ? (
+        <span>{w.title.replace(/_/g, ' ')}</span>
+      ) : (
+        <ImageIcon size={22} />
+      )}
     </div>
   );
 }
 
 /** Max number of "heavy" rich previews (code/table/list/links) rendered per half. */
 const MAX_RICH = 2;
-const RICH_ORDER: ContentKind['kind'][] = ['image', 'code', 'table', 'list', 'links', 'attachment'];
+const RICH_ORDER: ContentKind['kind'][] = ['widget', 'image', 'code', 'table', 'list', 'links', 'attachment'];
 
 function RichKinds({ preview }: { preview: NodePreview }) {
   if (!preview.kinds.length) return null;
@@ -77,6 +176,8 @@ function RichKinds({ preview }: { preview: NodePreview }) {
   let heavy = 0;
   const out: ReactNode[] = [];
   for (const k of ordered) {
+    // Images and widgets render as uniform tiles in the bottom thumbnail strip.
+    if (k.kind === 'image' || k.kind === 'widget') continue;
     const isHeavy = k.kind === 'code' || k.kind === 'table' || k.kind === 'list' || k.kind === 'links';
     if (isHeavy) {
       if (heavy >= MAX_RICH) continue;
@@ -84,6 +185,7 @@ function RichKinds({ preview }: { preview: NodePreview }) {
     }
     out.push(<KindBlock key={chipKey(k)} kind={k} />);
   }
+  if (!out.length) return null;
   return <div className="cg-rich">{out}</div>;
 }
 
@@ -95,6 +197,7 @@ function chipKey(k: ContentKind): string {
     case 'image': return `image:${k.count}`;
     case 'attachment': return `attachment:${k.count}`;
     case 'links': return `links:${k.count}`;
+    case 'widget': return `widget:${k.count}`;
   }
 }
 
@@ -146,33 +249,6 @@ function KindBlock({ kind }: { kind: ContentKind }) {
           {kind.count > kind.items.length && (
             <div className="cg-muted">+{kind.count - kind.items.length} more</div>
           )}
-        </div>
-      );
-    case 'image':
-      if (kind.images.length === 0) {
-        return (
-          <div className="cg-badge" title="Contains an image">
-            <ImageIcon size={12} />
-            <span>Image</span>
-          </div>
-        );
-      }
-      return (
-        <div className="cg-thumbs">
-          {kind.images.slice(0, 3).map((im, i) => (
-            <a
-              key={i}
-              className="cg-thumb"
-              href={im.fullUrl || im.thumbUrl}
-              target="_blank"
-              rel="noreferrer"
-              title={im.name || 'image'}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img src={im.thumbUrl} alt={im.name || ''} loading="lazy" />
-            </a>
-          ))}
-          {kind.count > 3 && <span className="cg-muted">+{kind.count - 3}</span>}
         </div>
       );
     case 'attachment':

@@ -309,27 +309,64 @@
 }
 .cg-node .cg-badge svg { flex-shrink: 0; }
 
-/* Image thumbnails */
-.cg-node .cg-thumbs {
+/* Bottom thumbnail strip — every image + visualization across the card, one
+   uniform tile size, single row pinned to the card bottom. `margin-top:auto`
+   absorbs slack so it always hugs the bottom edge. */
+.cg-node .cg-thumbstrip {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-top: auto;
+  border-top: 1px solid var(--cg-border);
 }
-.cg-node .cg-thumb {
-  display: block;
-  width: 56px;
-  height: 44px;
+.cg-node .cg-thumb-more { font-size: 11px; flex-shrink: 0; }
+
+/* Uniform tile. Light surface so dark-text SVG diagrams stay legible. */
+.cg-node .cg-wthumb {
+  width: 88px;
+  height: 64px;
   border-radius: 6px;
   border: 1px solid var(--cg-border);
+  background: #fbfbfa;
   overflow: hidden;
   flex-shrink: 0;
+  cursor: pointer;
 }
-.cg-node .cg-thumb img {
+.cg-node .cg-wthumb:hover { border-color: var(--cg-accent); }
+.cg-node .cg-wthumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
+  pointer-events: none;
+}
+/* Uploaded images fill the tile (cover) rather than letterbox. */
+.cg-node .cg-wthumb-img img { object-fit: cover; }
+/* Non-SVG widget / image-without-thumb: centered icon instead of a render. */
+.cg-node .cg-wthumb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cg-fg-muted);
+}
+/* Non-SVG widget: show the module name (no faithful image to render). */
+.cg-node .cg-wthumb-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  text-align: center;
+}
+.cg-node .cg-wthumb-label span {
+  font-size: 9.5px;
+  line-height: 1.25;
+  color: var(--cg-fg-muted);
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* File badges (filename + type/size; clickable when a URL exists) */
@@ -351,39 +388,39 @@ a.cg-file:hover { border-color: var(--cg-accent); }
 .cg-node .cg-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cg-node .cg-file-meta { flex-shrink: 0; font-size: 10px; }
 
-/* Hover preview — Q on top, A on bottom */
-.cg-preview {
+/* Enlarged visualization preview — shown while hovering a node's thumbnail. */
+.cg-wpreview {
   position: fixed;
   z-index: 2147483647;
-  width: 400px;
-  max-height: 420px;
+  max-height: 380px;
   overflow: auto;
-  padding: 12px 14px;
+  padding: 10px;
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border-strong);
   border-radius: 10px;
   box-shadow: var(--cg-shadow);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
   pointer-events: none;
 }
-.cg-preview-label {
-  font-size: 10px;
+.cg-wpreview-title {
+  font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.62;
-  margin-bottom: 4px;
-}
-.cg-preview-body {
-  margin-bottom: 10px;
+  opacity: 0.7;
+  margin-bottom: 6px;
   word-break: break-word;
 }
-.cg-preview-divider {
-  height: 1px;
-  background: var(--cg-border);
-  margin: 0 -14px 10px;
+.cg-wpreview-img {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #fff;
+  border-radius: 6px;
+}
+.cg-wpreview-frame {
+  width: 100%;
+  height: 320px;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
 }
 
 .cg-empty {

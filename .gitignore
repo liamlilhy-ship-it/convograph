@@ -1,5 +1,5 @@
-# Dependencies
-node_modules/
+# Dependencies (no trailing slash so worktree node_modules symlinks match too)
+node_modules
 
 # Build output
 extension/dist/

@@ -1,6 +1,6 @@
 import type { ApiConversation, ApiMessage } from '../api/types';
 import { computeNodePreview, type NodePreview } from './preview';
-import type { ImageRef, FileRef, MediaRefs } from './contentKinds';
+import type { ImageRef, FileRef, WidgetRef, MediaRefs } from './contentKinds';
 
 export type TreeNode = {
   id: string;
@@ -44,7 +44,19 @@ function textOf(msg: ApiMessage): string {
 function mediaOf(msg: ApiMessage): MediaRefs {
   const images: ImageRef[] = [];
   const files: FileRef[] = [];
+  const widgets: WidgetRef[] = [];
   const seen = new Set<string>();
+
+  // Visualizations rendered inline by a tool (claude.ai's `visualize:show_widget`).
+  // The markup lives in the tool_use input and is never echoed into a file array,
+  // so we pull it straight from the content blocks.
+  for (const c of msg.content ?? []) {
+    if (c.type !== 'tool_use' || c.name !== 'visualize:show_widget') continue;
+    const code = typeof c.input?.widget_code === 'string' ? c.input.widget_code : '';
+    if (!code) continue;
+    const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
+    widgets.push({ title, code, isSvg: code.trim().startsWith('<svg') });
+  }
 
   const take = (key: string | null): boolean => {
     if (!key) return true;
@@ -84,7 +96,7 @@ function mediaOf(msg: ApiMessage): MediaRefs {
     }
   }
 
-  return { images, files };
+  return { images, files, widgets };
 }
 
 /** Derives a display type from a filename extension (e.g. "report.pdf" → "pdf"). */

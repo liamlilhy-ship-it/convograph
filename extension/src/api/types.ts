@@ -1,6 +1,10 @@
 export type ApiContentBlock = {
   type: string;
   text?: string;
+  /** tool_use blocks carry the invoked tool's name and input (e.g. claude.ai's
+   *  `visualize:show_widget`, whose input.widget_code is renderable markup). */
+  name?: string;
+  input?: Record<string, unknown>;
 };
 
 /**

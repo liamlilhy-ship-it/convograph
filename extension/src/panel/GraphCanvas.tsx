@@ -11,13 +11,13 @@ import {
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard } from './NodeCard';
-import { HoverPreview } from './HoverPreview';
+import { HoverPreview, type PreviewItem } from './HoverPreview';
 
 type CgNodeData = {
   node: DisplayNode;
   jumping: boolean;
-  onHoverStart: (n: DisplayNode, r: DOMRect) => void;
-  onHoverEnd: () => void;
+  onPreview: (item: PreviewItem, r: DOMRect) => void;
+  onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
 };
 
@@ -32,8 +32,8 @@ const NODE_TYPES = {
     <NodeCard
       node={data.node}
       jumping={data.jumping}
-      onHoverStart={data.onHoverStart}
-      onHoverEnd={data.onHoverEnd}
+      onPreview={data.onPreview}
+      onPreviewEnd={data.onPreviewEnd}
       onClick={data.onClick}
     />
   ),
@@ -47,7 +47,7 @@ export type GraphCanvasProps = {
 };
 
 export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: GraphCanvasProps) {
-  const [hover, setHover] = useState<{ node: DisplayNode; anchor: DOMRect } | null>(null);
+  const [hover, setHover] = useState<{ item: PreviewItem; anchor: DOMRect } | null>(null);
   const hoverTimer = useRef<number | null>(null);
 
   // When the tree identity changes (chat switch, refetch), drop any stale hover.
@@ -59,14 +59,14 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
     setHover(null);
   }, [tree]);
 
-  const handleHoverStart = useCallback((node: DisplayNode, anchor: DOMRect) => {
+  const handlePreview = useCallback((item: PreviewItem, anchor: DOMRect) => {
     if (hoverTimer.current != null) {
       clearTimeout(hoverTimer.current);
       hoverTimer.current = null;
     }
-    hoverTimer.current = window.setTimeout(() => setHover({ node, anchor }), 220);
+    hoverTimer.current = window.setTimeout(() => setHover({ item, anchor }), 220);
   }, []);
-  const handleHoverEnd = useCallback(() => {
+  const handlePreviewEnd = useCallback(() => {
     if (hoverTimer.current != null) {
       clearTimeout(hoverTimer.current);
       hoverTimer.current = null;
@@ -115,8 +115,8 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       data: {
         node: n,
         jumping: jumpingId === n.id,
-        onHoverStart: handleHoverStart,
-        onHoverEnd: handleHoverEnd,
+        onPreview: handlePreview,
+        onPreviewEnd: handlePreviewEnd,
         onClick: onNodeClick,
       },
       draggable: false,
@@ -154,12 +154,12 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       ];
     }
     return { nodes: rfNodes, edges: rfEdges, translateExtent: extent };
-  }, [tree, direction, jumpingId, handleHoverStart, handleHoverEnd, onNodeClick]);
+  }, [tree, direction, jumpingId, handlePreview, handlePreviewEnd, onNodeClick]);
 
   // A vertical (TB) chat tree is tall-and-narrow; a portrait minimap shows its
   // top-to-bottom structure instead of crushing it into a landscape sliver.
   // LR layouts are wide, so flip to landscape.
-  const minimapStyle = direction === 'TB' ? { width: 132, height: 208 } : { width: 220, height: 140 };
+  const minimapStyle = direction === 'TB' ? { width: 100, height: 156 } : { width: 165, height: 105 };
 
   return (
     <div className="cg-canvas">
@@ -197,7 +197,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
           />
         </ReactFlow>
       </ReactFlowProvider>
-      {hover && <HoverPreview node={hover.node} anchor={hover.anchor} />}
+      {hover && <HoverPreview item={hover.item} anchor={hover.anchor} />}
     </div>
   );
 }

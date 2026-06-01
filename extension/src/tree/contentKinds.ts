@@ -6,8 +6,14 @@ export type LinkItem = { text: string; url: string };
 export type ImageRef = { thumbUrl: string; fullUrl?: string; name?: string };
 /** Model-agnostic file reference. `url` may be absent (e.g. extracted-text docs). */
 export type FileRef = { name: string; type?: string; size?: number; url?: string };
+/**
+ * A rendered visualization a tool produced inline (claude.ai's
+ * `visualize:show_widget`). `code` is self-contained markup; `isSvg` flags the
+ * cheap-to-thumbnail SVG case versus arbitrary HTML (sandboxed-iframe only).
+ */
+export type WidgetRef = { title?: string; code: string; isSvg: boolean };
 /** Media extracted from a message's non-text fields, passed into detectKinds. */
-export type MediaRefs = { images: ImageRef[]; files: FileRef[] };
+export type MediaRefs = { images: ImageRef[]; files: FileRef[]; widgets?: WidgetRef[] };
 
 export type ContentKind =
   | { kind: 'code'; language?: string; blockCount: number; dominant: boolean; snippet: string }
@@ -15,7 +21,8 @@ export type ContentKind =
   | { kind: 'table'; rowCount: number; colCount: number; headers: string[] }
   | { kind: 'image'; count: number; images: ImageRef[] }
   | { kind: 'attachment'; count: number; files: FileRef[] }
-  | { kind: 'links'; count: number; items: LinkItem[] };
+  | { kind: 'links'; count: number; items: LinkItem[] }
+  | { kind: 'widget'; count: number; widgets: WidgetRef[] };
 
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
 const LIST_LINE_RE = /^\s*(?:[-*+]\s+|\d+\.\s+)/;
@@ -93,6 +100,12 @@ export function detectKinds(
   );
   if (files.length || hasAttachBlock) {
     kinds.push({ kind: 'attachment', count: files.length || (hasAttachBlock ? 1 : 0), files });
+  }
+
+  // Tool-rendered visualizations (e.g. claude.ai's `visualize:show_widget`).
+  const widgets = media?.widgets ?? [];
+  if (widgets.length) {
+    kinds.push({ kind: 'widget', count: widgets.length, widgets });
   }
 
   // Link-heavy text (don't double-count those inside code fences)
