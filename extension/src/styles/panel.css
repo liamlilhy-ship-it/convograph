@@ -441,3 +441,25 @@ a.cg-file:hover { border-color: var(--cg-accent); }
   border-color: var(--cg-border) !important;
   color: var(--cg-fg) !important;
 }
+
+/* Minimap — surfaces on pan/zoom, then fades out (visibility toggled in JS). */
+.cg-minimap.react-flow__minimap {
+  /* Width/height come from the React Flow `style` prop (so its internal scale
+     matches the rendered box); orientation flips with the layout direction. */
+  margin: 10px;
+  border: 1px solid var(--cg-border);
+  border-radius: 8px;
+  box-shadow: var(--cg-shadow);
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
+}
+.cg-minimap.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cg-minimap .react-flow__minimap-mask {
+  stroke: var(--cg-accent);
+  stroke-width: 2;
+}

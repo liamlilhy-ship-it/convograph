@@ -22,8 +22,8 @@ export function layoutTree<T extends Layoutable>(
     direction = 'TB',
     nodeWidth = 300,
     nodeHeight = 300,
-    rankSep = 80,
-    nodeSep = 44,
+    rankSep = 48,
+    nodeSep = 32,
   } = opts;
 
   const g = new dagre.graphlib.Graph();
