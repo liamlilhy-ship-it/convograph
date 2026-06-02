@@ -144,3 +144,13 @@ export function ExpandIcon(p: IconProps) {
     </svg>
   );
 }
+
+/** Rounded-rectangle window glyph — opens a node's full-content in a floating window. */
+export function WindowIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <rect x="1.5" y="2.5" width="11" height="9" rx="2" />
+      <line x1="1.5" y1="5" x2="12.5" y2="5" />
+    </svg>
+  );
+}

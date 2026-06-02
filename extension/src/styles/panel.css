@@ -618,9 +618,16 @@
 
 /* ===== Full-content preview ===== */
 
-/* Per-node trigger button (card header, pinned right) */
-.cg-node .cg-pv-btn {
+/* Per-node action buttons (card header, pinned right): inline-preview toggle +
+   full-window trigger. */
+.cg-node .cg-head-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cg-node .cg-pv-btn,
+.cg-node .cg-pv-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -634,10 +641,37 @@
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.cg-node .cg-pv-btn:hover {
+.cg-node .cg-pv-btn:hover,
+.cg-node .cg-pv-toggle:hover {
   background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
+/* Active state: the card is currently expanded in place. */
+.cg-node .cg-pv-toggle[data-active="true"] {
+  background: var(--cg-accent-soft);
+  color: var(--cg-accent);
+}
+
+/* In-place preview: the card body becomes a fixed, scrollable reader that reuses
+   the full-preview content rules (.cg-pv-content / .cg-pv-md), mirroring the
+   floating window's .cg-pv-body. */
+.cg-node-pv-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  /* Keep wheel/trackpad scrolling inside the card: don't chain to the host
+     claude.ai page (or the canvas) at a scroll boundary or on an axis with no
+     overflow. Pairs with the `nowheel` class that stops React Flow from panning. */
+  overscroll-behavior: contain;
+  padding: 10px 12px 12px;
+  user-select: text;
+}
+/* A previewed card reads as a panel: no pointer cursor, no hover lift. The card
+   keeps overflow:hidden so the inner body owns the scroll. */
+.cg-node[data-preview="true"] { cursor: default; }
+.cg-node[data-preview="true"]:hover { transform: none; }
+/* …but the header row stays a jump target (the body is for reading). */
+.cg-node[data-preview="true"] .cg-head { cursor: pointer; }
 
 /* Floating window chrome */
 .cg-pv-window {

@@ -12,9 +12,15 @@ import {
   ClaudeIcon,
   RegenIcon,
   ExpandIcon,
+  WindowIcon,
 } from './icons';
 import { type PreviewItem } from './HoverPreview';
+import { FullPreview } from './FullPreview';
 import { svgDataUri } from './widgetRender';
+
+// Fixed markdown font size for the in-place preview (the floating window's is
+// adjustable; the inline card's is intentionally fixed).
+const INLINE_PREVIEW_FS = 14;
 
 type HoverApi = {
   onPreview: (item: PreviewItem, rect: DOMRect) => void;
@@ -24,8 +30,10 @@ type HoverApi = {
 export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
+  isPreview?: boolean;
   onClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
+  onTogglePreview: (node: DisplayNode) => void;
   style?: CSSProperties;
 };
 
@@ -36,7 +44,17 @@ export function hasMedia(p: NodePreview): boolean {
   );
 }
 
-export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, onOpenPreview, style }: NodeCardProps) {
+export function NodeCard({
+  node,
+  jumping,
+  isPreview,
+  onPreview,
+  onPreviewEnd,
+  onClick,
+  onOpenPreview,
+  onTogglePreview,
+  style,
+}: NodeCardProps) {
   const isHuman = node.role === 'human';
   const p = node.preview;
   const text = isHuman ? p.title : p.body || p.title;
@@ -48,6 +66,11 @@ export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, onOp
       : branch === 'edit'
         ? 'Edited question branch'
         : undefined;
+  // A previewed card is a reader — fix the font and stop card clicks from
+  // branch-jumping so text stays selectable.
+  const cardStyle: CSSProperties | undefined = isPreview
+    ? { ...style, ['--cg-pv-fs' as never]: `${INLINE_PREVIEW_FS}px` }
+    : style;
 
   return (
     <div
@@ -55,10 +78,17 @@ export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, onOp
       data-role={node.role}
       data-active={node.isOnActivePath ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
-      style={style}
-      onClick={() => onClick(node)}
+      data-preview={isPreview ? 'true' : 'false'}
+      style={cardStyle}
+      onClick={isPreview ? undefined : () => onClick(node)}
     >
-      <div className="cg-head">
+      <div
+        className="cg-head"
+        // In preview mode the card body is for reading (no card-level jump), so the
+        // header stays the jump affordance — click the role row to jump to this message.
+        onClick={isPreview ? () => onClick(node) : undefined}
+        title={isPreview ? 'Jump to this message' : undefined}
+      >
         <span className="cg-role">
           {isHuman ? <UserIcon size={12} /> : <ClaudeIcon size={12} />}
           {isHuman ? 'You' : 'Claude'}
@@ -74,33 +104,57 @@ export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, onOp
             {node.siblingIndex + 1}/{node.siblingCount}
           </span>
         )}
-        <button
-          type="button"
-          className="cg-pv-btn"
-          title="Open full preview"
-          aria-label="Open full preview"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenPreview(node);
-          }}
-        >
-          <ExpandIcon size={12} />
-        </button>
-      </div>
-      <div className="cg-body">
-        <div className="cg-content">
-          <div className="cg-snippet cg-text">
-            {text ? renderText(text, p.highlights) : <em style={{ opacity: 0.55 }}>(empty)</em>}
-          </div>
-          <RichKinds preview={p} />
+        <div className="cg-head-actions">
+          <button
+            type="button"
+            className="cg-pv-btn"
+            title="Open full preview window"
+            aria-label="Open full preview window"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenPreview(node);
+            }}
+          >
+            <WindowIcon size={12} />
+          </button>
+          <button
+            type="button"
+            className="cg-pv-toggle"
+            data-active={isPreview ? 'true' : 'false'}
+            title={isPreview ? 'Collapse preview' : 'Preview in place'}
+            aria-label={isPreview ? 'Collapse preview' : 'Preview in place'}
+            aria-pressed={isPreview ? 'true' : 'false'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePreview(node);
+            }}
+          >
+            <ExpandIcon size={12} />
+          </button>
         </div>
       </div>
-      <Footer
-        files={collectFiles(p)}
-        artifacts={collectArtifacts(p)}
-        thumbs={collectThumbs(p)}
-        hover={hover}
-      />
+      {isPreview ? (
+        <div className="cg-node-pv-body nowheel nopan">
+          <FullPreview node={node} />
+        </div>
+      ) : (
+        <>
+          <div className="cg-body">
+            <div className="cg-content">
+              <div className="cg-snippet cg-text">
+                {text ? renderText(text, p.highlights) : <em style={{ opacity: 0.55 }}>(empty)</em>}
+              </div>
+              <RichKinds preview={p} />
+            </div>
+          </div>
+          <Footer
+            files={collectFiles(p)}
+            artifacts={collectArtifacts(p)}
+            thumbs={collectThumbs(p)}
+            hover={hover}
+          />
+        </>
+      )}
     </div>
   );
 }

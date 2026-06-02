@@ -47,6 +47,10 @@ export function App() {
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
+  // Nodes currently expanded into an in-place ("inline") preview. Multiple may be
+  // open at once; the graph layout reflows around them. Distinct from the floating
+  // windows in `openPreviews`.
+  const [previewIds, setPreviewIds] = useState<Set<string>>(new Set());
   // Shared preview font size — adjusting it in any window applies to all open
   // windows and any opened afterward.
   const [previewFontPx, setPreviewFontPx] = useState(DEFAULT_FS);
@@ -88,6 +92,17 @@ export function App() {
     setOpenPreviews((prev) => prev.map((p) => (p.key === key ? { ...p, ...geo } : p)));
   }, []);
 
+  // Toggle a node's in-place preview. The layout reflows automatically (GraphCanvas
+  // keys its layout memo off these ids).
+  const toggleInlinePreview = useCallback((node: DisplayNode) => {
+    setPreviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(node.id)) next.delete(node.id);
+      else next.add(node.id);
+      return next;
+    });
+  }, []);
+
   // Tile all open windows into a grid across the area left of the side panel.
   const tidyPreviews = useCallback(() => {
     setOpenPreviews((prev) => {
@@ -117,7 +132,10 @@ export function App() {
   // Previews belong to graph mode — clear them when the panel closes (which also
   // fires on chat switch, since that closes the panel).
   useEffect(() => {
-    if (!open) setOpenPreviews([]);
+    if (!open) {
+      setOpenPreviews([]);
+      setPreviewIds(new Set());
+    }
   }, [open]);
 
   // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
@@ -315,6 +333,8 @@ export function App() {
               direction={direction}
               onNodeClick={handleNodeClick}
               onOpenPreview={openPreview}
+              previewIds={previewIds}
+              onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
             />
           ) : (

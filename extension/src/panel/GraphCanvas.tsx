@@ -18,7 +18,9 @@ import { HoverPreview, type PreviewItem } from './HoverPreview';
 type CgNodeData = {
   node: DisplayNode;
   jumping: boolean;
+  width: number;
   height: number;
+  isPreview: boolean;
   // Handle sides follow the layout direction so edges anchor (and smoothstep-route)
   // from the correct card edges: TB enters top / leaves bottom, LR enters left / leaves right.
   targetPos: Position;
@@ -27,12 +29,16 @@ type CgNodeData = {
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
   onOpenPreview: (n: DisplayNode) => void;
+  onTogglePreview: (n: DisplayNode) => void;
 };
 
 // Single-role cards come in two fixed height tiers so same-content nodes match.
 const NODE_W = 300;
 const H_TEXT = 132; // text-only (and inline code/table/list/links) nodes
 const H_MEDIA = 220; // nodes with a footer (files / images / widgets)
+// In-place preview card — a fixed, scrollable reader (matches the floating window).
+const PREVIEW_W = 480;
+const PREVIEW_H = 560;
 // One node of slack around the graph so panning stops just past the edge
 // messages rather than locking exactly to them.
 const EXTENT_PAD = 300;
@@ -51,11 +57,13 @@ const NODE_TYPES = {
       <NodeCard
         node={data.node}
         jumping={data.jumping}
-        style={{ height: data.height }}
+        isPreview={data.isPreview}
+        style={{ width: data.width, height: data.height }}
         onPreview={data.onPreview}
         onPreviewEnd={data.onPreviewEnd}
         onClick={data.onClick}
         onOpenPreview={data.onOpenPreview}
+        onTogglePreview={data.onTogglePreview}
       />
       <Handle type="source" position={data.sourcePos} isConnectable={false} />
     </>
@@ -67,10 +75,20 @@ export type GraphCanvasProps = {
   direction?: LayoutDirection;
   onNodeClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
+  previewIds: Set<string>;
+  onToggleInlinePreview: (node: DisplayNode) => void;
   jumpingId?: string | null;
 };
 
-export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview, jumpingId }: GraphCanvasProps) {
+export function GraphCanvas({
+  tree,
+  direction = 'TB',
+  onNodeClick,
+  onOpenPreview,
+  previewIds,
+  onToggleInlinePreview,
+  jumpingId,
+}: GraphCanvasProps) {
   const [hover, setHover] = useState<{ item: PreviewItem; anchor: DOMRect } | null>(null);
   const hoverTimer = useRef<number | null>(null);
 
@@ -106,6 +124,20 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview
     if (mapTimer.current != null) clearTimeout(mapTimer.current);
     mapTimer.current = window.setTimeout(() => setMapVisible(false), 1400);
   }, []);
+
+  // While panning the canvas, suppress text selection on the underlying claude.ai
+  // page: React Flow's own drag-selection guard (d3-zoom `dragDisable`) doesn't
+  // reach the host document across our shadow root, so a drag would otherwise
+  // highlight the chat behind the panel. Restored when the pan ends.
+  const prevBodyUserSelect = useRef('');
+  const handleMoveStart = useCallback(() => {
+    prevBodyUserSelect.current = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+    window.getSelection()?.removeAllRanges();
+  }, []);
+  const handleMoveEnd = useCallback(() => {
+    document.body.style.userSelect = prevBodyUserSelect.current;
+  }, []);
   useEffect(
     () => () => {
       if (mapTimer.current != null) clearTimeout(mapTimer.current);
@@ -124,9 +156,14 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview
   );
 
   const { nodes, edges, translateExtent } = useMemo(() => {
-    // Tag each node with its fixed tier size so dagre spaces tiers without
+    // Tag each node with its fixed box size so dagre spaces tiers without
     // overlap/gaps, and the rendered card matches the laid-out box exactly.
-    const sized = tree.orderedNodes.map((n) => ({ ...n, width: NODE_W, height: tierHeight(n) }));
+    // In-place-previewed nodes use the larger fixed reader size, so dagre reflows
+    // neighbors around them automatically.
+    const sized = tree.orderedNodes.map((n) => {
+      const pv = previewIds.has(n.id);
+      return { ...n, width: pv ? PREVIEW_W : NODE_W, height: pv ? PREVIEW_H : tierHeight(n) };
+    });
     const { nodes: laid, edges } = layoutTree(sized, { direction });
     const activeSet = new Set(tree.activePath);
     const isTB = direction === 'TB';
@@ -151,16 +188,23 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview
         { type: 'target' as const, position: targetPos, x: isTB ? n.width / 2 : 0, y: isTB ? 0 : n.height / 2, width: 1, height: 1 },
         { type: 'source' as const, position: sourcePos, x: isTB ? n.width / 2 : n.width, y: isTB ? n.height : n.height / 2, width: 1, height: 1 },
       ],
+      // React Flow can't measure inside the shadow root, so it won't pick up size
+      // changes on its own — pin the wrapper box explicitly so it resizes when a
+      // node toggles in/out of preview.
+      style: { width: n.width, height: n.height },
       data: {
         node: n,
         jumping: jumpingId === n.id,
+        width: n.width,
         height: n.height,
+        isPreview: previewIds.has(n.id),
         targetPos,
         sourcePos,
         onPreview: handlePreview,
         onPreviewEnd: handlePreviewEnd,
         onClick: onNodeClick,
         onOpenPreview,
+        onTogglePreview: onToggleInlinePreview,
       },
       draggable: false,
       selectable: false,
@@ -197,7 +241,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview
       ];
     }
     return { nodes: rfNodes, edges: rfEdges, translateExtent: extent };
-  }, [tree, direction, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview]);
+  }, [tree, direction, jumpingId, previewIds, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview]);
 
   // A vertical (TB) chat tree is tall-and-narrow; a portrait minimap shows its
   // top-to-bottom structure instead of crushing it into a landscape sliver.
@@ -221,6 +265,8 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview
           zoomOnPinch
           panOnScroll
           onMove={handleMove}
+          onMoveStart={handleMoveStart}
+          onMoveEnd={handleMoveEnd}
         >
           <Background gap={24} size={1} color="var(--cg-border)" />
           <Controls showInteractive={false} />
