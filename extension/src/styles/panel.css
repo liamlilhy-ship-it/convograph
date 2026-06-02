@@ -568,6 +568,18 @@
 
 /* React Flow overrides — keep the rendering clean */
 .react-flow__attribution { display: none !important; }
+/* Handles exist only as edge anchors (this graph is read-only) — keep them in
+   layout so edges meet the card's edge-center, but hide the default dots. */
+.react-flow__handle {
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
 .react-flow__edge-path {
   stroke: var(--cg-border-strong);
   stroke-width: 1.5;
