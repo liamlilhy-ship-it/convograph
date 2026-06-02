@@ -21,6 +21,12 @@ const MIN_W = 320;
 const MIN_H = 200;
 // One above the side panel (2147483645), one below the hover preview (…647).
 const PV_Z = 2147483646;
+// Preview markdown font size (px). Shared across all windows so adjusting it in
+// one applies everywhere — including windows opened afterward. Default is one step
+// up from the old 13.5px.
+export const DEFAULT_FS = 15;
+const MIN_FS = 12;
+const MAX_FS = 24;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -28,6 +34,8 @@ function clamp(v: number, lo: number, hi: number): number {
 
 type PreviewLayerProps = {
   previews: OpenPreview[];
+  fontPx: number;
+  onFontPx: (next: number) => void;
   onClose: (key: string) => void;
   onFocus: (key: string) => void;
   onGeometry: (key: string, geo: Geometry) => void;
@@ -35,13 +43,15 @@ type PreviewLayerProps = {
 
 /** Renders all open preview windows over the page (children of the pointer-events:none
  *  root; each window re-enables pointer events). */
-export function PreviewLayer({ previews, onClose, onFocus, onGeometry }: PreviewLayerProps) {
+export function PreviewLayer({ previews, fontPx, onFontPx, onClose, onFocus, onGeometry }: PreviewLayerProps) {
   return (
     <>
       {previews.map((pv) => (
         <PreviewWindow
           key={pv.key}
           pv={pv}
+          fontPx={fontPx}
+          onFontPx={onFontPx}
           onClose={onClose}
           onFocus={onFocus}
           onGeometry={onGeometry}
@@ -53,11 +63,15 @@ export function PreviewLayer({ previews, onClose, onFocus, onGeometry }: Preview
 
 function PreviewWindow({
   pv,
+  fontPx,
+  onFontPx,
   onClose,
   onFocus,
   onGeometry,
 }: {
   pv: OpenPreview;
+  fontPx: number;
+  onFontPx: (next: number) => void;
   onClose: (key: string) => void;
   onFocus: (key: string) => void;
   onGeometry: (key: string, geo: Geometry) => void;
@@ -125,7 +139,7 @@ function PreviewWindow({
     <>
       <div
         className="cg-pv-window"
-        style={{ left: x, top: y, width: w, height: h, zIndex: PV_Z }}
+        style={{ left: x, top: y, width: w, height: h, zIndex: PV_Z, ['--cg-pv-fs' as never]: `${fontPx}px` }}
         onMouseDown={() => onFocus(key)}
       >
         <div className="cg-pv-head" onMouseDown={startDrag}>
@@ -133,6 +147,28 @@ function PreviewWindow({
             {isHuman ? <UserIcon size={11} /> : <ClaudeIcon size={11} />}
           </span>
           <span className="cg-pv-title">{title}</span>
+          <div className="cg-pv-fontctl" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="cg-pv-fbtn"
+              title="Decrease font size"
+              aria-label="Decrease font size"
+              disabled={fontPx <= MIN_FS}
+              onClick={() => onFontPx(Math.max(MIN_FS, fontPx - 1))}
+            >
+              A−
+            </button>
+            <button
+              type="button"
+              className="cg-pv-fbtn"
+              title="Increase font size"
+              aria-label="Increase font size"
+              disabled={fontPx >= MAX_FS}
+              onClick={() => onFontPx(Math.min(MAX_FS, fontPx + 1))}
+            >
+              A+
+            </button>
+          </div>
           <button
             type="button"
             className="cg-pv-close"

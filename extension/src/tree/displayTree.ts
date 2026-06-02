@@ -1,5 +1,6 @@
 import type { BuiltTree, TreeNode } from './buildTree';
 import type { NodePreview } from './preview';
+import type { PreviewBlock } from './contentKinds';
 import { siblingHighlights } from './siblingDiff';
 
 /**
@@ -25,6 +26,8 @@ export type DisplayNode = {
   childIds: string[];
   preview: NodePreview;
   fullText: string;
+  /** Ordered body blocks (text runs + inline widgets) for the full preview. */
+  body: PreviewBlock[];
   /** Question text of this turn (the human message). Same on the question node
    *  AND its answer node, so clicking either centers the question bubble. */
   questionText: string;
@@ -62,8 +65,10 @@ type TurnPair = {
   parentId: string | null;
   childIds: string[];
   humanFullText: string;
+  humanBody: PreviewBlock[];
   humanPreview: NodePreview;
   assistantFullText: string;
+  assistantBody: PreviewBlock[];
   assistantPreview: NodePreview;
   isOnActivePath: boolean;
   siblingIndex: number;
@@ -160,8 +165,10 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
         parentId: null,
         childIds: [],
         humanFullText: node.fullText,
+        humanBody: node.body,
         humanPreview: node.preview,
         assistantFullText: '',
+        assistantBody: [],
         assistantPreview: emptyPreview(),
         isOnActivePath: false,
         siblingIndex: 0,
@@ -183,8 +190,10 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
           parentId: null,
           childIds: [],
           humanFullText: node.fullText,
+          humanBody: node.body,
           humanPreview: node.preview,
           assistantFullText: a.fullText,
+          assistantBody: a.body,
           // Clone so sibling-diff writes don't mutate the shared TreeNode preview.
           assistantPreview: { ...a.preview, highlights: [] },
           isOnActivePath: false,
@@ -304,6 +313,7 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
       childIds: hasAnswer ? [aId] : [],
       preview: p.humanPreview,
       fullText: p.humanFullText,
+      body: p.humanBody,
       questionText: p.humanFullText,
       leafId: p.leafId,
       isOnActivePath: p.isOnActivePath,
@@ -322,6 +332,7 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
         childIds: p.childIds.map((c) => `${c}::q`),
         preview: p.assistantPreview,
         fullText: p.assistantFullText,
+        body: p.assistantBody,
         questionText: p.humanFullText,
         leafId: p.leafId,
         isOnActivePath: p.isOnActivePath,

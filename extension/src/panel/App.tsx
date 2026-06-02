@@ -3,7 +3,7 @@ import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromU
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
-import { PreviewLayer, type OpenPreview, type Geometry } from './PreviewLayer';
+import { PreviewLayer, DEFAULT_FS, type OpenPreview, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
 import { jumpToNode } from '../navigation/jumpToNode';
@@ -47,6 +47,9 @@ export function App() {
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
+  // Shared preview font size — adjusting it in any window applies to all open
+  // windows and any opened afterward.
+  const [previewFontPx, setPreviewFontPx] = useState(DEFAULT_FS);
   const orgIdRef = useRef<string | null>(null);
   const reqRef = useRef(0);
   const cascadeRef = useRef(0);
@@ -331,6 +334,8 @@ export function App() {
       {open && (
         <PreviewLayer
           previews={openPreviews}
+          fontPx={previewFontPx}
+          onFontPx={setPreviewFontPx}
           onClose={closePreview}
           onFocus={focusPreview}
           onGeometry={setPreviewGeometry}

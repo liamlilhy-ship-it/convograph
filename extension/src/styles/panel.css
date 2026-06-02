@@ -146,7 +146,7 @@
   border: 1px solid var(--cg-border);
   border-radius: 10px;
   box-shadow: var(--cg-shadow);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
   cursor: pointer;
   overflow: hidden;
@@ -693,6 +693,31 @@
   cursor: pointer;
 }
 .cg-pv-close:hover { background: var(--cg-accent-soft); color: var(--cg-accent); }
+/* Per-window font-size controls (A− / A+) */
+.cg-pv-fontctl {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.cg-pv-fbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cg-fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.cg-pv-fbtn:hover { background: var(--cg-accent-soft); color: var(--cg-accent); }
+.cg-pv-fbtn:disabled { opacity: 0.4; cursor: default; }
 .cg-pv-body {
   flex: 1 1 auto;
   overflow: auto;
@@ -751,7 +776,7 @@
   margin-bottom: 3px;
 }
 .cg-pv-qtext {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--cg-fg);
   white-space: pre-wrap;
   word-break: break-word;
@@ -759,9 +784,10 @@
   overflow: auto;
 }
 
-/* Markdown body */
+/* Markdown body — base size is per-window adjustable (A−/A+ in the header set
+   --cg-pv-fs); headings/code/tables use em so they scale with it. */
 .cg-pv-md {
-  font-size: 13.5px;
+  font-size: var(--cg-pv-fs, 15px);
   line-height: 1.6;
   color: var(--cg-fg);
   word-break: break-word;
@@ -815,16 +841,21 @@
   border-radius: 8px;
   display: block;
 }
-.cg-pv-widgets { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+/* Widgets render inline in the body (in document order), so each carries its own
+   vertical spacing rather than relying on a grouping wrapper. */
 .cg-pv-widget-img {
+  display: block;
   max-width: 100%;
+  margin: 14px 0;
   border: 1px solid var(--cg-border);
   border-radius: 8px;
   background: #fff;
 }
 .cg-pv-widget-frame {
+  display: block;
   width: 100%;
   height: 360px;
+  margin: 14px 0;
   border: 1px solid var(--cg-border);
   border-radius: 8px;
   background: #fff;

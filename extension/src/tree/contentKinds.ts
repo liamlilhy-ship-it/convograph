@@ -36,6 +36,17 @@ export type ContentKind =
   | { kind: 'widget'; count: number; widgets: WidgetRef[] }
   | { kind: 'artifact'; count: number; items: ArtifactRef[] };
 
+/**
+ * One block of a message body, in original document order — produced by walking
+ * the message's content array. A `md` block is a run of markdown text; a `widget`
+ * block is a tool-rendered visualization sitting exactly where it appeared inline.
+ * The full preview renders these in sequence so widgets land in place rather than
+ * being grouped after all the text.
+ */
+export type PreviewBlock =
+  | { kind: 'md'; text: string }
+  | { kind: 'widget'; widget: WidgetRef };
+
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
 const LIST_LINE_RE = /^\s*(?:[-*+]\s+|\d+\.\s+)/;
 const TABLE_LINE_RE = /^\s*\|.*\|\s*$/;

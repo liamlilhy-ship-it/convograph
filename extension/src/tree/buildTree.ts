@@ -1,6 +1,6 @@
 import type { ApiConversation, ApiMessage } from '../api/types';
 import { computeNodePreview, type NodePreview } from './preview';
-import type { ImageRef, FileRef, WidgetRef, ArtifactRef, MediaRefs } from './contentKinds';
+import type { ImageRef, FileRef, WidgetRef, ArtifactRef, MediaRefs, PreviewBlock } from './contentKinds';
 
 export type TreeNode = {
   id: string;
@@ -10,6 +10,9 @@ export type TreeNode = {
   /** Legacy short snippet — kept for compatibility. Prefer `preview.title`. */
   snippet: string;
   fullText: string;
+  /** Message body split into ordered blocks (text runs + inline widgets), in the
+   *  original document order — for the full preview's in-place rendering. */
+  body: PreviewBlock[];
   preview: NodePreview;
   createdAt: number;
   isOnActivePath: boolean;
@@ -30,6 +33,37 @@ function textOf(msg: ApiMessage): string {
     .map((c) => (c.type === 'text' ? c.text ?? '' : ''))
     .filter(Boolean);
   return parts.join('\n').trim();
+}
+
+/**
+ * Splits a message into ordered body blocks by walking its content array in
+ * document order: consecutive text blocks coalesce into one markdown run, and a
+ * `visualize:show_widget` tool_use becomes a widget block exactly where it sits
+ * between the text. (Images live in the file arrays with no inline anchor, and
+ * `present_files`/`create_file` are end-of-message artifacts — both are rendered
+ * as trailing sections by the preview, not woven into the body.)
+ */
+function bodyOf(msg: ApiMessage): PreviewBlock[] {
+  const blocks: PreviewBlock[] = [];
+  let run: string[] = [];
+  const flush = () => {
+    const t = run.join('\n').trim();
+    if (t) blocks.push({ kind: 'md', text: t });
+    run = [];
+  };
+  for (const c of msg.content ?? []) {
+    if (c.type === 'text') {
+      if (c.text) run.push(c.text);
+    } else if (c.type === 'tool_use' && c.name === 'visualize:show_widget') {
+      const code = typeof c.input?.widget_code === 'string' ? c.input.widget_code : '';
+      if (!code) continue;
+      flush();
+      const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
+      blocks.push({ kind: 'widget', widget: { title, code, isSvg: code.trim().startsWith('<svg') } });
+    }
+  }
+  flush();
+  return blocks;
 }
 
 /**
@@ -146,6 +180,7 @@ export function buildTree(conv: ApiConversation): BuiltTree {
       sender: msg.sender,
       snippet: preview.title,
       fullText: full,
+      body: bodyOf(msg),
       preview,
       createdAt: new Date(msg.created_at).getTime(),
       isOnActivePath: false,

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
-import type { ContentKind, ImageRef, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
+import type { ContentKind, ImageRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
@@ -25,15 +25,21 @@ export function FullPreview({ node }: { node: DisplayNode }) {
   const isHuman = node.role === 'human';
   const p = node.preview;
 
-  const html = useMemo(() => (node.fullText ? renderMarkdown(node.fullText) : ''), [node.fullText]);
+  // Render the body in original document order: text runs as markdown, widgets in
+  // place. Markdown parsing is memoized so dragging the window doesn't reparse.
+  const body = useMemo(
+    () =>
+      node.body.map((b) =>
+        b.kind === 'md' ? { kind: 'md' as const, html: renderMarkdown(b.text) } : b,
+      ),
+    [node.body],
+  );
 
   const images: ImageRef[] = kindOf(p, 'image')?.images ?? [];
-  const widgets: WidgetRef[] = kindOf(p, 'widget')?.widgets ?? [];
   const artifacts: ArtifactRef[] = kindOf(p, 'artifact')?.items ?? [];
   const files: FileRef[] = kindOf(p, 'attachment')?.files ?? [];
 
-  const empty =
-    !html && !images.length && !widgets.length && !artifacts.length && !files.length;
+  const empty = body.length === 0 && !images.length && !artifacts.length && !files.length;
 
   return (
     <div className="cg-pv-content">
@@ -50,8 +56,26 @@ export function FullPreview({ node }: { node: DisplayNode }) {
         </div>
       )}
 
-      {html && (
-        <div className="cg-pv-md" dangerouslySetInnerHTML={{ __html: html }} />
+      {body.map((b, i) =>
+        b.kind === 'md' ? (
+          <div key={i} className="cg-pv-md" dangerouslySetInnerHTML={{ __html: b.html }} />
+        ) : b.widget.isSvg ? (
+          <img
+            key={i}
+            className="cg-pv-widget-img"
+            src={svgDataUri(b.widget.code)}
+            alt={b.widget.title || 'visualization'}
+            loading="lazy"
+          />
+        ) : (
+          <iframe
+            key={i}
+            className="cg-pv-widget-frame"
+            sandbox="allow-scripts"
+            srcDoc={widgetSrcDoc(b.widget.code)}
+            title={b.widget.title || 'visualization'}
+          />
+        ),
       )}
 
       {images.length > 0 && (
@@ -71,30 +95,6 @@ export function FullPreview({ node }: { node: DisplayNode }) {
               </a>
             );
           })}
-        </div>
-      )}
-
-      {widgets.length > 0 && (
-        <div className="cg-pv-widgets">
-          {widgets.map((w, i) =>
-            w.isSvg ? (
-              <img
-                key={i}
-                className="cg-pv-widget-img"
-                src={svgDataUri(w.code)}
-                alt={w.title || 'visualization'}
-                loading="lazy"
-              />
-            ) : (
-              <iframe
-                key={i}
-                className="cg-pv-widget-frame"
-                sandbox="allow-scripts"
-                srcDoc={widgetSrcDoc(w.code)}
-                title={w.title || 'visualization'}
-              />
-            ),
-          )}
         </div>
       )}
 
