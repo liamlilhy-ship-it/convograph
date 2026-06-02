@@ -100,3 +100,35 @@ export function ChevronRightIcon(p: IconProps) {
     </svg>
   );
 }
+
+/** Person glyph — marks a question (human) node. */
+export function UserIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <circle cx="7" cy="4.5" r="2.2" />
+      <path d="M2.6 12c0-2.5 2-4 4.4-4s4.4 1.5 4.4 4" />
+    </svg>
+  );
+}
+
+/** Simplified Claude sunburst — marks an answer (assistant) node. */
+export function ClaudeIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <line x1="7" y1="1.5" x2="7" y2="12.5" />
+      <line x1="1.5" y1="7" x2="12.5" y2="7" />
+      <line x1="3.1" y1="3.1" x2="10.9" y2="10.9" />
+      <line x1="10.9" y1="3.1" x2="3.1" y2="10.9" />
+    </svg>
+  );
+}
+
+/** Circular-arrow glyph — marks a regenerated (same-question) branch. */
+export function RegenIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M11.5 5.5A4.5 4.5 0 1 0 12 8" />
+      <polyline points="11.5 2.5 11.5 5.5 8.5 5.5" />
+    </svg>
+  );
+}

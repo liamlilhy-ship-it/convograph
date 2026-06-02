@@ -10,28 +10,37 @@ import {
 } from '@xyflow/react';
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
-import { NodeCard } from './NodeCard';
+import { NodeCard, hasMedia } from './NodeCard';
 import { HoverPreview, type PreviewItem } from './HoverPreview';
 
 type CgNodeData = {
   node: DisplayNode;
   jumping: boolean;
+  height: number;
   onPreview: (item: PreviewItem, r: DOMRect) => void;
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
 };
 
-// Per-node slot size used for layout/bounds (matches layoutTree's defaults).
-const NODE_SLOT = 300;
+// Single-role cards come in two fixed height tiers so same-content nodes match.
+const NODE_W = 300;
+const H_TEXT = 132; // text-only (and inline code/table/list/links) nodes
+const H_MEDIA = 220; // nodes with a footer (files / images / widgets)
 // One node of slack around the graph so panning stops just past the edge
 // messages rather than locking exactly to them.
 const EXTENT_PAD = 300;
+
+/** Fixed height tier for a node — text-only vs. has-footer media. */
+function tierHeight(n: DisplayNode): number {
+  return hasMedia(n.preview) ? H_MEDIA : H_TEXT;
+}
 
 const NODE_TYPES = {
   cgNode: ({ data }: { data: CgNodeData }) => (
     <NodeCard
       node={data.node}
       jumping={data.jumping}
+      style={{ height: data.height }}
       onPreview={data.onPreview}
       onPreviewEnd={data.onPreviewEnd}
       onClick={data.onClick}
@@ -100,7 +109,10 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
   );
 
   const { nodes, edges, translateExtent } = useMemo(() => {
-    const { nodes: laid, edges } = layoutTree(tree.orderedNodes, { direction });
+    // Tag each node with its fixed tier size so dagre spaces tiers without
+    // overlap/gaps, and the rendered card matches the laid-out box exactly.
+    const sized = tree.orderedNodes.map((n) => ({ ...n, width: NODE_W, height: tierHeight(n) }));
+    const { nodes: laid, edges } = layoutTree(sized, { direction });
     const activeSet = new Set(tree.activePath);
     const rfNodes: Node[] = laid.map((n) => ({
       id: n.id,
@@ -108,13 +120,14 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       position: { x: n.x, y: n.y },
       // React Flow's auto-measurement doesn't populate `measured` inside our
       // shadow root (cards are sized by CSS instead), which left fitView and the
-      // MiniMap with no dimensions — an empty map. Seed explicit fallback dims so
-      // both have real bounds to work from.
-      initialWidth: 300,
-      initialHeight: 240,
+      // MiniMap with no dimensions — an empty map. Seed explicit dims (the tier
+      // size) so both have real bounds to work from.
+      initialWidth: n.width,
+      initialHeight: n.height,
       data: {
         node: n,
         jumping: jumpingId === n.id,
+        height: n.height,
         onPreview: handlePreview,
         onPreviewEnd: handlePreviewEnd,
         onClick: onNodeClick,
@@ -145,8 +158,8 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       for (const n of laid) {
         minX = Math.min(minX, n.x);
         minY = Math.min(minY, n.y);
-        maxX = Math.max(maxX, n.x + NODE_SLOT);
-        maxY = Math.max(maxY, n.y + NODE_SLOT);
+        maxX = Math.max(maxX, n.x + n.width);
+        maxY = Math.max(maxY, n.y + n.height);
       }
       extent = [
         [minX - EXTENT_PAD, minY - EXTENT_PAD],

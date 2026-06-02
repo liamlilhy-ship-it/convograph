@@ -1,8 +1,17 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
-import type { ContentKind, WidgetRef, ArtifactRef } from '../tree/contentKinds';
+import type { ContentKind, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
-import { CodeIcon, ImageIcon, AttachmentIcon, LinkIcon, FileIcon } from './icons';
+import {
+  CodeIcon,
+  ImageIcon,
+  AttachmentIcon,
+  LinkIcon,
+  FileIcon,
+  UserIcon,
+  ClaudeIcon,
+  RegenIcon,
+} from './icons';
 import { svgDataUri, type PreviewItem } from './HoverPreview';
 
 type HoverApi = {
@@ -17,89 +26,125 @@ export type NodeCardProps = HoverApi & {
   style?: CSSProperties;
 };
 
+/** Whether a preview carries media (drives the footer + the height tier). */
+export function hasMedia(p: NodePreview): boolean {
+  return p.kinds.some(
+    (k) => k.kind === 'image' || k.kind === 'widget' || k.kind === 'attachment' || k.kind === 'artifact',
+  );
+}
+
 export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, style }: NodeCardProps) {
-  const pending = node.assistantId == null;
-  const a = node.assistantPreview;
-  const aText = a.body || a.title;
+  const isHuman = node.role === 'human';
+  const p = node.preview;
+  const text = isHuman ? p.title : p.body || p.title;
   const hover: HoverApi = { onPreview, onPreviewEnd };
+  const branch = node.branchKind;
+  const pipTitle =
+    branch === 'regenerate'
+      ? 'Regenerated answer (same question)'
+      : branch === 'edit'
+        ? 'Edited question branch'
+        : undefined;
+
   return (
     <div
       className="cg-node"
+      data-role={node.role}
       data-active={node.isOnActivePath ? 'true' : 'false'}
-      data-pending={pending ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
       style={style}
       onClick={() => onClick(node)}
     >
-      <div className="cg-half cg-half-q">
-        <div className="cg-row">
-          <span className="cg-tag cg-tag-q">You</span>
-          {node.siblingCount > 1 && (
-            <span
-              className="cg-pip"
-              title={node.shareQWithSiblings ? 'Regenerated answer variants' : 'Edited question branches'}
-            >
-              {node.siblingIndex + 1}/{node.siblingCount}
-            </span>
-          )}
-        </div>
-        <div className="cg-snippet cg-title" data-shared={node.shareQWithSiblings ? 'true' : 'false'}>
-          {node.humanPreview.title || <em style={{ opacity: 0.55 }}>(empty)</em>}
-        </div>
-        <RichKinds preview={node.humanPreview} />
+      <div className="cg-head">
+        <span className="cg-role">
+          {isHuman ? <UserIcon size={12} /> : <ClaudeIcon size={12} />}
+          {isHuman ? 'You' : 'Claude'}
+        </span>
+        {branch === 'regenerate' && (
+          <span className="cg-tag-regen" title="Regenerated answer (same question)">
+            <RegenIcon size={11} />
+            regen
+          </span>
+        )}
+        {branch && node.siblingCount > 1 && (
+          <span className="cg-pip" title={pipTitle}>
+            {node.siblingIndex + 1}/{node.siblingCount}
+          </span>
+        )}
       </div>
-      <div className="cg-divider" />
-      <div className="cg-half cg-half-a">
-        <div className="cg-row">
-          <span className="cg-tag cg-tag-a">Claude</span>
+      <div className="cg-body">
+        <div className="cg-content">
+          <div className="cg-snippet cg-text">
+            {text ? renderText(text, p.highlights) : <em style={{ opacity: 0.55 }}>(empty)</em>}
+          </div>
+          <RichKinds preview={p} />
         </div>
-        <div className="cg-snippet cg-body">
-          {pending ? (
-            <em style={{ opacity: 0.55 }}>awaiting response…</em>
-          ) : aText ? (
-            renderText(aText, a.highlights)
-          ) : (
-            <em style={{ opacity: 0.55 }}>(empty)</em>
-          )}
-        </div>
-        <RichKinds preview={a} />
       </div>
       <Footer
-        artifacts={collectArtifacts(a)}
-        thumbs={collectThumbs(node.humanPreview, a)}
+        files={collectFiles(p)}
+        artifacts={collectArtifacts(p)}
+        thumbs={collectThumbs(p)}
         hover={hover}
       />
     </div>
   );
 }
 
-/** Bottom footer: generated-artifact rows stacked above the thumbnail strip.
- *  `margin-top:auto` (in CSS) pins the whole block to the card's bottom edge. */
+/** Bottom footer: files (uploaded + generated) stacked above the thumbnail
+ *  strip. `margin-top:auto` (CSS) pins the block to the card's bottom edge. */
 function Footer({
+  files,
   artifacts,
   thumbs,
   hover,
 }: {
+  files: FileRef[];
   artifacts: ArtifactRef[];
   thumbs: Thumb[];
   hover: HoverApi;
 }) {
-  if (!artifacts.length && !thumbs.length) return null;
+  if (!files.length && !artifacts.length && !thumbs.length) return null;
   return (
     <div className="cg-foot">
+      <FileStrip files={files} />
       <ArtifactStrip artifacts={artifacts} />
       <ThumbStrip thumbs={thumbs} hover={hover} />
     </div>
   );
 }
 
-/** Flatten generated artifacts across previews, in order. */
-function collectArtifacts(...previews: NodePreview[]): ArtifactRef[] {
-  const out: ArtifactRef[] = [];
-  for (const p of previews) {
-    for (const k of p.kinds) {
-      if (k.kind === 'artifact') out.push(...k.items);
+/** Uploaded-file rows (filename + type/size). */
+function collectFiles(p: NodePreview): FileRef[] {
+  for (const k of p.kinds) {
+    if (k.kind === 'attachment') {
+      // Generic attachment with no concrete file metadata → a single placeholder.
+      if (k.files.length === 0 && k.count > 0) return [{ name: 'Attachment' }];
+      return k.files.slice(0, 3);
     }
+  }
+  return [];
+}
+
+function FileStrip({ files }: { files: FileRef[] }) {
+  if (!files.length) return null;
+  return (
+    <div className="cg-files">
+      {files.map((f, i) => (
+        <div key={i} className="cg-file" title={f.name}>
+          <AttachmentIcon size={12} />
+          <span className="cg-file-name">{f.name}</span>
+          {fileMeta(f) && <span className="cg-muted cg-file-meta">{fileMeta(f)}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Flatten generated artifacts in this preview, in order. */
+function collectArtifacts(p: NodePreview): ArtifactRef[] {
+  const out: ArtifactRef[] = [];
+  for (const k of p.kinds) {
+    if (k.kind === 'artifact') out.push(...k.items);
   }
   return out;
 }
@@ -124,25 +169,23 @@ function ArtifactStrip({ artifacts }: { artifacts: ArtifactRef[] }) {
 type Thumb =
   | { t: 'img'; src: string; href: string; title?: string }
   | { t: 'svg'; w: WidgetRef }
-  | { t: 'wicon'; w: WidgetRef }   // non-SVG widget: hoverable icon tile
-  | { t: 'imgicon' };              // image block with no thumbnail URL
+  | { t: 'wicon'; w: WidgetRef } // non-SVG widget: hoverable icon tile
+  | { t: 'imgicon' }; // image block with no thumbnail URL
 
-/** Flatten every image + widget across both halves into one ordered tile list. */
-function collectThumbs(...previews: NodePreview[]): Thumb[] {
+/** Flatten every image + widget in this preview into one ordered tile list. */
+function collectThumbs(p: NodePreview): Thumb[] {
   const out: Thumb[] = [];
-  for (const p of previews) {
-    for (const k of p.kinds) {
-      if (k.kind === 'image') {
-        if (k.images.length) {
-          for (const im of k.images) {
-            out.push({ t: 'img', src: im.thumbUrl, href: im.fullUrl || im.thumbUrl, title: im.name });
-          }
-        } else {
-          out.push({ t: 'imgicon' });
+  for (const k of p.kinds) {
+    if (k.kind === 'image') {
+      if (k.images.length) {
+        for (const im of k.images) {
+          out.push({ t: 'img', src: im.thumbUrl, href: im.fullUrl || im.thumbUrl, title: im.name });
         }
-      } else if (k.kind === 'widget') {
-        for (const w of k.widgets) out.push(w.isSvg ? { t: 'svg', w } : { t: 'wicon', w });
+      } else {
+        out.push({ t: 'imgicon' });
       }
+    } else if (k.kind === 'widget') {
+      for (const w of k.widgets) out.push(w.isSvg ? { t: 'svg', w } : { t: 'wicon', w });
     }
   }
   return out;
@@ -215,9 +258,9 @@ function ThumbTile({ thumb, hover }: { thumb: Thumb; hover: HoverApi }) {
   );
 }
 
-/** Max number of "heavy" rich previews (code/table/list/links) rendered per half. */
+/** Max number of "heavy" rich previews (code/table/list/links) rendered. */
 const MAX_RICH = 2;
-const RICH_ORDER: ContentKind['kind'][] = ['widget', 'image', 'code', 'table', 'list', 'links', 'attachment'];
+const RICH_ORDER: ContentKind['kind'][] = ['code', 'table', 'list', 'links'];
 
 function RichKinds({ preview }: { preview: NodePreview }) {
   if (!preview.kinds.length) return null;
@@ -227,14 +270,12 @@ function RichKinds({ preview }: { preview: NodePreview }) {
   let heavy = 0;
   const out: ReactNode[] = [];
   for (const k of ordered) {
-    // Images/widgets render in the thumbnail strip; artifacts in their own
-    // strip — both live in the bottom footer, not here.
-    if (k.kind === 'image' || k.kind === 'widget' || k.kind === 'artifact') continue;
-    const isHeavy = k.kind === 'code' || k.kind === 'table' || k.kind === 'list' || k.kind === 'links';
-    if (isHeavy) {
-      if (heavy >= MAX_RICH) continue;
-      heavy++;
+    // Images/widgets/artifacts/attachments live in the bottom footer, not here.
+    if (k.kind === 'image' || k.kind === 'widget' || k.kind === 'artifact' || k.kind === 'attachment') {
+      continue;
     }
+    if (heavy >= MAX_RICH) continue;
+    heavy++;
     out.push(<KindBlock key={chipKey(k)} kind={k} />);
   }
   if (!out.length) return null;
@@ -243,14 +284,22 @@ function RichKinds({ preview }: { preview: NodePreview }) {
 
 function chipKey(k: ContentKind): string {
   switch (k.kind) {
-    case 'code': return `code:${k.language ?? ''}`;
-    case 'list': return `list:${k.itemCount}`;
-    case 'table': return `table:${k.colCount}x${k.rowCount}`;
-    case 'image': return `image:${k.count}`;
-    case 'attachment': return `attachment:${k.count}`;
-    case 'links': return `links:${k.count}`;
-    case 'widget': return `widget:${k.count}`;
-    case 'artifact': return `artifact:${k.count}`;
+    case 'code':
+      return `code:${k.language ?? ''}`;
+    case 'list':
+      return `list:${k.itemCount}`;
+    case 'table':
+      return `table:${k.colCount}x${k.rowCount}`;
+    case 'image':
+      return `image:${k.count}`;
+    case 'attachment':
+      return `attachment:${k.count}`;
+    case 'links':
+      return `links:${k.count}`;
+    case 'widget':
+      return `widget:${k.count}`;
+    case 'artifact':
+      return `artifact:${k.count}`;
   }
 }
 
@@ -272,10 +321,14 @@ function KindBlock({ kind }: { kind: ContentKind }) {
         <div className="cg-tablep" title={`Table ${kind.colCount}×${kind.rowCount}`}>
           <div className="cg-tablep-head">
             {kind.headers.slice(0, 4).map((h, i) => (
-              <span className="cg-tablep-cell" key={i}>{h}</span>
+              <span className="cg-tablep-cell" key={i}>
+                {h}
+              </span>
             ))}
           </div>
-          <div className="cg-muted">{kind.colCount} cols · {kind.rowCount} rows</div>
+          <div className="cg-muted">
+            {kind.colCount} cols · {kind.rowCount} rows
+          </div>
         </div>
       );
     case 'list':
@@ -301,36 +354,6 @@ function KindBlock({ kind }: { kind: ContentKind }) {
           ))}
           {kind.count > kind.items.length && (
             <div className="cg-muted">+{kind.count - kind.items.length} more</div>
-          )}
-        </div>
-      );
-    case 'attachment':
-      if (kind.files.length === 0) {
-        return (
-          <div className="cg-badge" title="Contains an attachment">
-            <AttachmentIcon size={12} />
-            <span>Attachment</span>
-          </div>
-        );
-      }
-      return (
-        <div className="cg-files">
-          {kind.files.slice(0, 3).map((f, i) => {
-            const inner = (
-              <>
-                <AttachmentIcon size={12} />
-                <span className="cg-file-name">{f.name}</span>
-                {fileMeta(f) && <span className="cg-muted cg-file-meta">{fileMeta(f)}</span>}
-              </>
-            );
-            return (
-              <div key={i} className="cg-file" title={f.name}>
-                {inner}
-              </div>
-            );
-          })}
-          {kind.count > kind.files.length && (
-            <span className="cg-muted">+{kind.count - kind.files.length} more</span>
           )}
         </div>
       );
@@ -378,7 +401,9 @@ function renderText(text: string, highlights: string[]): ReactNode {
   const parts = text.split(/(\b[A-Za-z][A-Za-z0-9'-]*\b)/);
   return parts.map((part, i) =>
     set.has(part.toLowerCase()) ? (
-      <mark className="cg-diff" key={i}>{part}</mark>
+      <mark className="cg-diff" key={i}>
+        {part}
+      </mark>
     ) : (
       <span key={i}>{part}</span>
     ),

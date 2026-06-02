@@ -9,157 +9,160 @@ import type { ApiConversation } from '../api/types';
 
 const build = (fixture: unknown) => buildDisplayTree(buildTree(fixture as ApiConversation));
 
+// Display-node id helpers: a turn pair `${humanId}::${assistantId|'pending'}`
+// explodes into a question node (`::q`) and an answer node (`::a`).
+const qid = (h: string, a: string | null) => `${h}::${a ?? 'pending'}::q`;
+const aid = (h: string, a: string) => `${h}::${a}::a`;
+
 describe('buildDisplayTree — linear', () => {
-  it('pairs the single (H, A) and shows a pending half-card for the trailing H', () => {
+  it('emits alternating Q → A → Q nodes with a trailing leaf question', () => {
     const dt = build(linear);
-    // linear.json: m1(H), m2(A), m3(H, no A yet) — current_leaf=m3
-    const pairs = [...dt.byId.values()];
-    expect(pairs).toHaveLength(2);
+    // linear.json: m1(H) → m2(A) → m3(H, no A) — current_leaf = m3
+    expect(dt.byId.size).toBe(3);
 
-    const ready = pairs.find((p) => p.assistantId === 'm2')!;
-    expect(ready.humanId).toBe('m1');
-    expect(ready.humanSnippet).toBe('Hello Claude');
-    // New snippet heuristic skips short "Hi!" sentence and picks the first
-    // 4+ word sentence — better scanability.
-    expect(ready.assistantSnippet).toBe('How can I help?');
+    const q1 = dt.byId.get(qid('m1', 'm2'))!;
+    const a1 = dt.byId.get(aid('m1', 'm2'))!;
+    const q3 = dt.byId.get(qid('m3', null))!;
 
-    const pending = pairs.find((p) => p.assistantId === null)!;
-    expect(pending.humanId).toBe('m3');
-    expect(pending.assistantSnippet).toBe('');
+    expect(q1.role).toBe('human');
+    expect(q1.preview.title).toBe('Hello Claude');
+    expect(q1.parentId).toBeNull();
+    expect(q1.childIds).toEqual([a1.id]);
+    expect(q1.branchKind).toBeNull();
 
-    expect(dt.activePath).toEqual([ready.id, pending.id]);
-    expect(ready.isOnActivePath).toBe(true);
-    expect(pending.isOnActivePath).toBe(true);
+    expect(a1.role).toBe('assistant');
+    // Shown from the beginning — no filler/sentence skipping.
+    expect(a1.preview.title).toBe('Hi! How can I help?');
+    expect(a1.parentId).toBe(q1.id);
+    expect(a1.childIds).toEqual([q3.id]);
+    // Clicking the answer centers the QUESTION bubble → same text as its question.
+    expect(a1.questionText).toBe(q1.fullText);
+
+    expect(q3.role).toBe('human');
+    expect(q3.preview.title).toBe('Tell me a joke');
+    expect(q3.parentId).toBe(a1.id);
+    expect(q3.childIds).toEqual([]);
+    expect(q3.leafId).toBe('m3');
+
+    expect(dt.roots.map((r) => r.id)).toEqual([q1.id]);
+    expect(dt.activePath).toEqual([q1.id, a1.id, q3.id]);
+    expect([q1, a1, q3].every((n) => n.isOnActivePath)).toBe(true);
   });
 });
 
-describe('buildDisplayTree — scenario #2: edit-question diverges', () => {
-  it('renders sibling cards with different Q text', () => {
+describe('buildDisplayTree — regenerate (question duplicated per answer)', () => {
+  it('duplicates the question per branch, each tagged regenerate', () => {
+    const dt = build(regenerate);
+    // regenerate.json: h1 → { a1, a2, a3 }  current_leaf = a2
+    expect(dt.byId.size).toBe(6);
+
+    const branches = ['a1', 'a2', 'a3'];
+    for (const a of branches) {
+      const q = dt.byId.get(qid('h1', a))!;
+      const ans = dt.byId.get(aid('h1', a))!;
+      expect(q.role).toBe('human');
+      expect(q.preview.title).toBe('Pick a color'); // same question text
+      expect(q.branchKind).toBe('regenerate');
+      expect(q.siblingCount).toBe(3);
+      expect(q.parentId).toBeNull(); // all roots
+      expect(q.childIds).toEqual([ans.id]);
+      expect(q.leafId).toBe(a); // each branch resolves to ITS own answer
+      expect(ans.role).toBe('assistant');
+      expect(ans.parentId).toBe(q.id);
+      expect(ans.branchKind).toBeNull();
+      expect(ans.questionText).toBe(q.fullText);
+    }
+
+    // The three duplicated questions are the roots.
+    expect(dt.roots.map((r) => r.id).sort()).toEqual(
+      [qid('h1', 'a1'), qid('h1', 'a2'), qid('h1', 'a3')].sort(),
+    );
+
+    // Distinctive-token highlights survive on the answers.
+    expect(dt.byId.get(aid('h1', 'a1'))!.preview.highlights).toContain('red');
+    expect(dt.byId.get(aid('h1', 'a2'))!.preview.highlights).toContain('indigo');
+    expect(dt.byId.get(aid('h1', 'a3'))!.preview.highlights.length).toBeGreaterThan(0);
+
+    // Only the active leaf's branch (a2) is highlighted.
+    expect(dt.activePath).toEqual([qid('h1', 'a2'), aid('h1', 'a2')]);
+    expect(dt.byId.get(qid('h1', 'a1'))!.isOnActivePath).toBe(false);
+    expect(dt.byId.get(qid('h1', 'a2'))!.isOnActivePath).toBe(true);
+    expect(dt.byId.get(aid('h1', 'a2'))!.isOnActivePath).toBe(true);
+    expect(dt.byId.get(qid('h1', 'a3'))!.isOnActivePath).toBe(false);
+  });
+});
+
+describe('buildDisplayTree — edit (different question siblings)', () => {
+  it('branches into sibling question nodes with different text, no tag', () => {
     const dt = build(singleEdit);
     // single-edit.json:
-    //   m1(H) -> m2(A) -> { m3a(H, dead branch), m3b(H) -> m4b(A) }
-    //   current_leaf = m4b
-    const pairs = [...dt.byId.values()];
+    //   m1(H) → m2(A) → { m3a(H, dead), m3b(H) → m4b(A) }  current_leaf = m4b
+    const rootA = dt.byId.get(aid('m1', 'm2'))!;
+    const editA = dt.byId.get(qid('m3a', null))!;
+    const editB = dt.byId.get(qid('m3b', 'm4b'))!;
+    const answerB = dt.byId.get(aid('m3b', 'm4b'))!;
 
-    const root = pairs.find((p) => p.humanId === 'm1' && p.assistantId === 'm2')!;
-    const editA = pairs.find((p) => p.humanId === 'm3a')!;
-    const editB = pairs.find((p) => p.humanId === 'm3b' && p.assistantId === 'm4b')!;
+    // Both edited questions hang off the prior turn's ANSWER node.
+    expect(rootA.childIds).toEqual([editA.id, editB.id]);
+    expect(editA.parentId).toBe(rootA.id);
+    expect(editB.parentId).toBe(rootA.id);
 
-    expect(editA.parentId).toBe(root.id);
-    expect(editB.parentId).toBe(root.id);
-    expect(root.childIds).toEqual([editA.id, editB.id]);
-
-    // Siblings have DIFFERENT Q text — not flagged as shared
-    expect(editA.shareQWithSiblings).toBe(false);
-    expect(editB.shareQWithSiblings).toBe(false);
-    expect(editA.humanSnippet).not.toBe(editB.humanSnippet);
-
+    // Different question text, flagged 'edit' (not 'regenerate').
+    expect(editA.preview.title).not.toBe(editB.preview.title);
+    expect(editA.branchKind).toBe('edit');
+    expect(editB.branchKind).toBe('edit');
     expect(editA.siblingCount).toBe(2);
     expect(editB.siblingCount).toBe(2);
 
+    // The dead branch is a leaf question (no answer node).
+    expect(editA.childIds).toEqual([]);
+    expect(dt.byId.has(aid('m3a', 'm4b'))).toBe(false);
+
+    // The live branch carries its answer; clicking it centers m3b's question.
+    expect(editB.childIds).toEqual([answerB.id]);
+    expect(answerB.questionText).toBe(editB.fullText);
+
     expect(editA.isOnActivePath).toBe(false);
     expect(editB.isOnActivePath).toBe(true);
-    expect(dt.activePath).toEqual([root.id, editB.id]);
+    expect(dt.activePath).toEqual([qid('m1', 'm2'), aid('m1', 'm2'), editB.id, answerB.id]);
   });
 });
 
-describe('buildDisplayTree — scenario #1: regenerate diverges as separate cards', () => {
-  it('produces N sibling cards sharing the same Q text', () => {
-    const dt = build(regenerate);
-    // regenerate.json: h1 -> { a1, a2, a3 }  current_leaf = a2
-    const pairs = [...dt.byId.values()];
-    expect(pairs).toHaveLength(3);
-
-    const p1 = pairs.find((p) => p.assistantId === 'a1')!;
-    const p2 = pairs.find((p) => p.assistantId === 'a2')!;
-    const p3 = pairs.find((p) => p.assistantId === 'a3')!;
-
-    // All three share the same human Q and the shared flag is set
-    expect(p1.humanId).toBe('h1');
-    expect(p2.humanId).toBe('h1');
-    expect(p3.humanId).toBe('h1');
-    expect(p1.humanSnippet).toBe(p2.humanSnippet);
-    expect(p2.humanSnippet).toBe(p3.humanSnippet);
-    expect(p1.shareQWithSiblings).toBe(true);
-    expect(p2.shareQWithSiblings).toBe(true);
-    expect(p3.shareQWithSiblings).toBe(true);
-
-    // All three are roots (no preceding turn), each their own card
-    expect(p1.parentId).toBeNull();
-    expect(p2.parentId).toBeNull();
-    expect(p3.parentId).toBeNull();
-    expect(dt.roots.map((r) => r.id).sort()).toEqual([p1.id, p2.id, p3.id].sort());
-
-    // Different A text per card
-    expect(p1.assistantSnippet).toBe('Red');
-    expect(p2.assistantSnippet).toBe('Indigo');
-    expect(p3.assistantSnippet).toBe('Forest green');
-
-    // Sibling pips at 1/3, 2/3, 3/3
-    expect(p1.siblingCount).toBe(3);
-    expect(p2.siblingCount).toBe(3);
-
-    // Only the active-leaf variant is on the active path
-    expect(p1.isOnActivePath).toBe(false);
-    expect(p2.isOnActivePath).toBe(true);
-    expect(p3.isOnActivePath).toBe(false);
-    expect(dt.activePath).toEqual([p2.id]);
-  });
-});
-
-describe('buildDisplayTree — nested edit + regenerate combination', () => {
-  it('builds depths and active path correctly', () => {
+describe('buildDisplayTree — nested edit + regenerate', () => {
+  it('mixes an edit and a regenerate under the same answer node', () => {
     const dt = build(nested);
     // nested.json:
-    //   h1(H) -> a1(A) -> { h2a -> a2a }, { h2b -> a3, a4 }
-    //   current_leaf = a4
-    const pairs = [...dt.byId.values()];
+    //   h1(H) → a1(A) → { h2a → a2a, h2b → { a3, a4 } }  current_leaf = a4
+    const rootQ = dt.byId.get(qid('h1', 'a1'))!;
+    const rootA = dt.byId.get(aid('h1', 'a1'))!;
+    const cats = dt.byId.get(qid('h2a', 'a2a'))!;
+    const dogs3 = dt.byId.get(qid('h2b', 'a3'))!;
+    const dogs4 = dt.byId.get(qid('h2b', 'a4'))!;
 
-    const root = pairs.find((p) => p.humanId === 'h1' && p.assistantId === 'a1')!;
-    const branchCats = pairs.find((p) => p.humanId === 'h2a' && p.assistantId === 'a2a')!;
-    const branchDogs3 = pairs.find((p) => p.humanId === 'h2b' && p.assistantId === 'a3')!;
-    const branchDogs4 = pairs.find((p) => p.humanId === 'h2b' && p.assistantId === 'a4')!;
+    // depths alternate Q(0) → A(1) → Q(2) → A(3)
+    expect(rootQ.depth).toBe(0);
+    expect(rootA.depth).toBe(1);
+    expect(cats.depth).toBe(2);
+    expect(dt.byId.get(aid('h2b', 'a4'))!.depth).toBe(3);
 
-    // depths
-    expect(root.depth).toBe(0);
-    expect(branchCats.depth).toBe(1);
-    expect(branchDogs3.depth).toBe(1);
-    expect(branchDogs4.depth).toBe(1);
+    // Three question children under the root answer: cats (edit) + two dogs (regen).
+    expect(rootA.childIds).toEqual([cats.id, dogs3.id, dogs4.id]);
+    expect(cats.branchKind).toBe('edit');
+    expect(dogs3.branchKind).toBe('regenerate');
+    expect(dogs4.branchKind).toBe('regenerate');
+    expect([cats, dogs3, dogs4].every((n) => n.siblingCount === 3)).toBe(true);
 
-    // The two dogs cards are regenerate siblings — share Q
-    expect(branchDogs3.shareQWithSiblings).toBe(true);
-    expect(branchDogs4.shareQWithSiblings).toBe(true);
-    // The cats card branches from the same parent but has a different Q — not shared
-    expect(branchCats.shareQWithSiblings).toBe(false);
+    // leafId resolves to the NEAREST childless leaf (unchanged from before).
+    expect(rootQ.leafId).toBe('a2a');
+    expect(rootA.leafId).toBe('a2a');
+    expect(cats.leafId).toBe('a2a');
+    expect(dogs3.leafId).toBe('a3');
+    expect(dogs4.leafId).toBe('a4');
 
-    // Cats and dogs siblings under the same parent display node (root)
-    expect(root.childIds).toContain(branchCats.id);
-    expect(root.childIds).toContain(branchDogs3.id);
-    expect(root.childIds).toContain(branchDogs4.id);
-    expect(root.childIds).toHaveLength(3);
-
-    // Active leaf is a4 → only branchDogs4 is on the active path (plus root)
-    expect(dt.activePath).toEqual([root.id, branchDogs4.id]);
-    expect(branchCats.isOnActivePath).toBe(false);
-    expect(branchDogs3.isOnActivePath).toBe(false);
-    expect(branchDogs4.isOnActivePath).toBe(true);
-  });
-
-  it('resolves leafId to the NEAREST childless leaf (not the newest deep branch)', () => {
-    const dt = build(nested);
-    const pairs = [...dt.byId.values()];
-    const root = pairs.find((p) => p.humanId === 'h1' && p.assistantId === 'a1')!;
-    const branchCats = pairs.find((p) => p.humanId === 'h2a' && p.assistantId === 'a2a')!;
-    const branchDogs3 = pairs.find((p) => p.humanId === 'h2b' && p.assistantId === 'a3')!;
-    const branchDogs4 = pairs.find((p) => p.humanId === 'h2b' && p.assistantId === 'a4')!;
-
-    // a1 has children. Nearest-leaf descent: both h2a and h2b reach a leaf in
-    // 2 hops, so tie-break by oldest child (h2a, created before h2b) -> a2a.
-    // Crucially NOT a4 (the newest deep regenerate) — that was the bug.
-    expect(root.leafId).toBe('a2a');
-    // Tip nodes (clicked answer is itself a leaf) resolve to exactly that message.
-    expect(branchCats.leafId).toBe('a2a');
-    expect(branchDogs3.leafId).toBe('a3');
-    expect(branchDogs4.leafId).toBe('a4');
+    // Active leaf a4 → only the dogs4 branch (plus root) is on the path.
+    expect(dt.activePath).toEqual([rootQ.id, rootA.id, dogs4.id, aid('h2b', 'a4')]);
+    expect(cats.isOnActivePath).toBe(false);
+    expect(dogs3.isOnActivePath).toBe(false);
+    expect(dogs4.isOnActivePath).toBe(true);
   });
 });

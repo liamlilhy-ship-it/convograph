@@ -63,39 +63,22 @@ export function stripFiller(role: 'human' | 'assistant', text: string): string {
 }
 
 /**
- * Selects the best title from a (cleaned) chunk of text.
- *   1. First markdown heading takes precedence (both roles).
- *   2. Human: keep the full question text (all its sentences/points) up to
- *      MAX_TITLE_HUMAN chars, truncating only when it's genuinely too long —
- *      so multi-sentence questions keep their context instead of being cut to
- *      the first sentence.
- *   3. Assistant: first informative sentence (≥4 words), skipping "OK."/"Sure!".
- *   4. Fallback: clamp the cleaned text.
+ * Title = the message from its ACTUAL beginning, clamped at a sentence boundary.
+ * We never skip leading words/sentences (per user preference); the only thing
+ * removed is a single leading block marker (`#`, `-`, `*`, `1.`) so the snippet
+ * doesn't open with a stray markdown symbol. Humans keep more context
+ * (MAX_TITLE_HUMAN) than assistants (MAX_TITLE) before truncating.
  */
 export function pickTitle(role: 'human' | 'assistant', text: string): string {
   if (!text) return '';
-  const head = text.slice(0, 800);
+  const limit = role === 'human' ? MAX_TITLE_HUMAN : MAX_TITLE;
+  const cleaned = stripLeadingMarker(collapseWhitespace(text).trim());
+  return clampAtSentence(cleaned, limit);
+}
 
-  // 1. Markdown heading
-  const headingMatch = head.match(/^[ \t]{0,3}(#{1,6})[ \t]+(.+?)\s*$/m);
-  if (headingMatch && headingMatch[2]) {
-    return clamp(collapseWhitespace(headingMatch[2]), MAX_TITLE);
-  }
-
-  // 2. Human: preserve full question context, truncate only when needed.
-  if (role === 'human') {
-    return clampAtSentence(collapseWhitespace(text).trim(), MAX_TITLE_HUMAN);
-  }
-
-  // 3. Assistant: first sentence of ≥ 4 words.
-  const sentenceMatches = head.split(/(?<=[.?!])\s+(?=[A-Z0-9"'(\[])/);
-  for (const s of sentenceMatches) {
-    const clean = collapseWhitespace(s).trim();
-    if (wordCount(clean) >= 4) return clamp(clean, MAX_TITLE);
-  }
-
-  // 4. Char fallback
-  return clamp(collapseWhitespace(text), MAX_TITLE);
+/** Drops a single leading block marker (heading / bullet / ordered) — keeps all words. */
+function stripLeadingMarker(s: string): string {
+  return s.replace(/^(?:#{1,6}|[-*+]|\d+\.)\s+/, '');
 }
 
 /**
@@ -122,7 +105,7 @@ function clampAtSentence(s: string, limit: number): string {
  * sentence boundary when one falls reasonably close to the limit.
  */
 export function pickBody(text: string, maxChars = MAX_BODY): string {
-  const cleaned = collapseWhitespace(stripFences(text)).trim();
+  const cleaned = stripLeadingMarker(collapseWhitespace(stripFences(text)).trim());
   if (cleaned.length <= maxChars) return cleaned;
   const slice = cleaned.slice(0, maxChars);
   const lastStop = Math.max(
@@ -149,8 +132,4 @@ function wordCount(s: string): number {
 
 function collapseWhitespace(s: string): string {
   return s.replace(/\s+/g, ' ');
-}
-
-function clamp(s: string, limit: number = MAX_TITLE): string {
-  return s.length <= limit ? s : s.slice(0, limit - 1) + '…';
 }

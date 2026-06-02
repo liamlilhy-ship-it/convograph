@@ -135,23 +135,27 @@
    instead of falling through to the pane (which would just pan the canvas). */
 .react-flow__node { pointer-events: auto; }
 
-/* Node card — split Q (top) / A (bottom) */
+/* Node card — a single role (question OR answer). Height is fixed per content
+   tier (set inline by GraphCanvas) so same-content nodes match exactly. */
 .cg-node {
+  box-sizing: border-box;
   width: 300px;
-  max-height: 300px;
   display: flex;
   flex-direction: column;
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border);
   border-radius: 10px;
   box-shadow: var(--cg-shadow);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
   cursor: pointer;
   overflow: hidden;
   pointer-events: auto;
   transition: border-color 120ms ease, transform 120ms ease, opacity 120ms ease;
 }
+/* Border-box every descendant so full-width rows (files/artifacts) include their
+   own padding + border and can't spill past the card's right edge. */
+.cg-node *, .cg-node *::before, .cg-node *::after { box-sizing: border-box; }
 /* Cards off the active path are dimmed so the selected (active) path stands out.
    Hovering a dimmed card restores it to full strength to signal interactivity. */
 .cg-node[data-active="false"]:not(:hover) { opacity: 0.5; }
@@ -164,32 +168,46 @@
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
 }
-.cg-node[data-pending="true"] .cg-half-a { opacity: 0.78; }
+/* Question vs answer: distinct soft surface tints + an accent top edge on
+   questions. Tints stay light so dark body text remains fully readable. */
+.cg-node[data-role="human"] {
+  background: var(--cg-node-q-bg);
+  border-top: 2px solid var(--cg-accent);
+}
+.cg-node[data-role="assistant"] { background: var(--cg-node-a-bg); }
 
-/* Halves are flex columns so media (cg-rich) is pinned and the prose body
-   shrinks first — media is never clipped by the card's max-height. */
-.cg-node .cg-half {
-  padding: 9px 12px;
+/* Header: role label (+ icon), optional regenerate tag, sibling pip. */
+.cg-node .cg-head {
   display: flex;
-  flex-direction: column;
-  min-height: 0;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 7px 12px 0;
 }
-.cg-node .cg-half-q { padding-bottom: 7px; flex: 0 0 auto; }
-.cg-node .cg-half-a { padding-top: 7px; flex: 1 1 auto; min-height: 0; }
-.cg-node .cg-half-a .cg-body { flex: 0 1 auto; min-height: 0; }
-.cg-node .cg-rich { flex: 0 0 auto; }
-.cg-node .cg-divider {
-  height: 1px;
-  background: var(--cg-border);
+.cg-node .cg-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
-
-.cg-node .cg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
-.cg-node .cg-tag {
-  font-size: 10px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em;
+.cg-node[data-role="human"] .cg-role { color: var(--cg-accent); }
+.cg-node[data-role="assistant"] .cg-role { color: var(--cg-fg-muted); }
+.cg-node .cg-tag-regen {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cg-accent);
+  padding: 1px 6px 1px 5px;
+  border-radius: 999px;
+  background: var(--cg-accent-soft);
 }
-.cg-node .cg-tag-q { color: var(--cg-accent); }
-.cg-node .cg-tag-a { color: var(--cg-fg-muted); }
 .cg-node .cg-pip {
   font-size: 10px;
   color: var(--cg-fg-muted);
@@ -199,18 +217,43 @@
   border-radius: 999px;
   border: 1px solid var(--cg-border);
 }
+
+/* Body fills the remaining fixed height; text clamps so a 1-line and a 5-line
+   message produce the same card height. */
+.cg-node .cg-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 7px 12px 11px;
+  display: flex;
+  flex-direction: column;
+}
+/* Inner clip layer: overflowing content is clipped HERE, so the body's bottom
+   padding always survives as breathing room (content never jams the edge). */
+.cg-node .cg-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 .cg-node .cg-snippet {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
 }
-/* Question half: keep a few lines of context. Answer half: longer body. */
-.cg-node .cg-title { -webkit-line-clamp: 5; font-weight: 500; }
-.cg-node .cg-body { -webkit-line-clamp: 5; opacity: 0.92; }
-/* When this turn's Q is shared with siblings (regenerate), dim slightly */
-.cg-node .cg-snippet[data-shared="true"] { opacity: 0.72; }
+/* Question and answer share one type treatment — same family, size, weight.
+   Text holds whole lines (flex: 0 0) so it never overlaps the block beneath it;
+   the clamp tightens to 3 lines when a footer or rich preview shares the card. */
+.cg-node .cg-text {
+  -webkit-line-clamp: 4;
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+.cg-node:has(.cg-foot) .cg-text,
+.cg-node:has(.cg-rich) .cg-text {
+  -webkit-line-clamp: 3;
+}
 
 /* Sibling-diff highlight (regenerate case). Keep calm: subtle bg, no underline. */
 .cg-node mark.cg-diff,
@@ -228,6 +271,7 @@
   flex-direction: column;
   gap: 5px;
   margin-top: 7px;
+  flex: 0 0 auto;
 }
 .cg-node .cg-muted { color: var(--cg-fg-muted); }
 
@@ -287,17 +331,26 @@
 .cg-node .cg-listp li { word-break: break-word; }
 
 /* Link list */
-.cg-node .cg-links { display: flex; flex-direction: column; gap: 2px; }
+.cg-node .cg-links { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .cg-node .cg-link {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
 .cg-node .cg-link svg { flex-shrink: 0; }
-.cg-node .cg-link-text { overflow: hidden; text-overflow: ellipsis; }
+/* Shrink + ellipsize the link text so a long URL/title can't push past the
+   card's right edge (the flex item needs min-width:0 to clip). */
+.cg-node .cg-link-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .cg-node .cg-link-host { flex-shrink: 0; font-size: 10px; }
 
 /* Single-line badge (image / attachment fallback) */
@@ -347,23 +400,32 @@
   font-size: 11px;
 }
 .cg-node .cg-artifact svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
-/* Full filename always visible: wrap instead of truncating. */
-.cg-node .cg-artifact-name { flex: 1; min-width: 0; word-break: break-word; }
+/* Full filename always visible: wrap (and break long unbroken names) so it
+   stays inside the card's right padding. */
+.cg-node .cg-artifact-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .cg-node .cg-artifact-type { flex-shrink: 0; margin-top: 1px; font-size: 10px; }
 
 /* Thumbnail strip — every image + visualization across the card, one uniform
-   tile size, single row. */
+   tile size, single row. `overflow:hidden` keeps tiles inside the card. */
 .cg-node .cg-thumbstrip {
   display: flex;
   align-items: center;
   gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
 }
 .cg-node .cg-thumb-more { font-size: 11px; flex-shrink: 0; }
 
-/* Uniform tile. Light surface so dark-text SVG diagrams stay legible. */
+/* Uniform tile. Light surface so dark-text SVG diagrams stay legible. Sized so
+   up to 3 tiles + a "+N" label fit within the card width. */
 .cg-node .cg-wthumb {
-  width: 88px;
-  height: 64px;
+  width: 74px;
+  height: 54px;
   border-radius: 6px;
   border: 1px solid var(--cg-border);
   background: #fbfbfa;
@@ -421,7 +483,12 @@
   color: inherit;
 }
 .cg-node .cg-file svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
-.cg-node .cg-file-name { flex: 1; min-width: 0; word-break: break-word; }
+.cg-node .cg-file-name {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
 .cg-node .cg-file-meta { flex-shrink: 0; font-size: 10px; }
 
 /* Enlarged visualization preview — shown while hovering a node's thumbnail. */
