@@ -135,7 +135,9 @@ async function center(el: HTMLElement): Promise<void> {
  * the chat is already on the right branch and the user scrolls manually.
  */
 async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean> {
-  const key = matchKey(stripMarkdown(node.humanFullText));
+  // `questionText` is the turn's human message for BOTH the question node and
+  // its answer node — so clicking an answer still centers the question bubble.
+  const key = matchKey(stripMarkdown(node.questionText));
   if (!key) return false;
   const deadline = Date.now() + budgetMs;
 

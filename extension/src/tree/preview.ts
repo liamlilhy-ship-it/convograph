@@ -1,5 +1,5 @@
 import type { ApiContentBlock } from '../api/types';
-import { stripFiller, pickTitle, pickBody, wordCountOf } from './snippet';
+import { pickTitle, pickBody, wordCountOf } from './snippet';
 import { detectKinds, type ContentKind, type MediaRefs } from './contentKinds';
 
 export type NodePreview = {
@@ -19,22 +19,22 @@ export function computeNodePreview(
   role: 'human' | 'assistant',
   media?: MediaRefs,
 ): NodePreview {
-  const stripped = stripFiller(role, text);
+  // Show the message from its actual beginning — no filler / leading-sentence
+  // skipping. (Per user preference: don't drop the first words.)
+  const kinds = detectKinds(text, blocks, media);
+  const code = kinds.find((k) => k.kind === 'code');
 
   // When code dominates, override the title with a "<Language> code" label
   // (or a synthetic title pulled from the first non-comment / non-import line
   // of the code body).
-  const kinds = detectKinds(stripped, blocks, media);
-  const code = kinds.find((k) => k.kind === 'code');
-
-  let title = pickTitle(role, stripped);
+  let title = pickTitle(role, text);
   if (code && code.kind === 'code' && code.dominant) {
-    title = synthesizeCodeTitle(stripped, code.language) ?? title;
+    title = synthesizeCodeTitle(text, code.language) ?? title;
   }
 
   return {
     title,
-    body: pickBody(stripped),
+    body: pickBody(text),
     kinds,
     wordCount: wordCountOf(text),
     highlights: [],

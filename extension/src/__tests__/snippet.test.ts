@@ -36,9 +36,11 @@ describe('stripFiller', () => {
 });
 
 describe('pickTitle', () => {
-  it('prefers a markdown heading when present', () => {
+  it('keeps text from the beginning, stripping only a leading heading marker', () => {
     const text = '## Bridge Construction\nHere are the key principles...';
-    expect(pickTitle('assistant', text)).toBe('Bridge Construction');
+    const out = pickTitle('assistant', text);
+    expect(out.startsWith('Bridge Construction')).toBe(true);
+    expect(out).toContain('key principles');
   });
 
   it('prefers the question for human text', () => {
@@ -47,10 +49,10 @@ describe('pickTitle', () => {
     expect(pickTitle('human', text).endsWith('?')).toBe(true);
   });
 
-  it('picks the first sentence of 4+ words otherwise', () => {
+  it('keeps the leading words (no sentence-skipping) for assistant text', () => {
     const text = 'OK. Here are the three main reasons we should rebuild it.';
     const out = pickTitle('assistant', text);
-    expect(out).toBe('Here are the three main reasons we should rebuild it.');
+    expect(out).toBe('OK. Here are the three main reasons we should rebuild it.');
   });
 
   it('falls back to a char clamp for one giant unsegmented blob', () => {

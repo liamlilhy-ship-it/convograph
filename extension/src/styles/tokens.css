@@ -7,6 +7,10 @@
   --cg-border-strong: rgba(31, 30, 29, 0.22);
   --cg-accent: #d97757;
   --cg-accent-soft: rgba(217, 119, 87, 0.14);
+  /* Per-role node surfaces — soft, readable tints (Q = warm coral wash,
+     A = clean white) that separate question from answer without heaviness. */
+  --cg-node-q-bg: #fbf2ec;
+  --cg-node-a-bg: #ffffff;
   --cg-shadow: 0 6px 24px rgba(31, 30, 29, 0.10);
   --cg-minimap-mask: rgba(31, 30, 29, 0.08);
   --cg-minimap-node: #b9b6ad;
@@ -24,6 +28,8 @@
   --cg-border-strong: rgba(250, 249, 245, 0.22);
   --cg-accent: #d97757;
   --cg-accent-soft: rgba(217, 119, 87, 0.20);
+  --cg-node-q-bg: #2e2825;
+  --cg-node-a-bg: #262524;
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #6b6862;

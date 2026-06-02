@@ -1,6 +1,12 @@
 import dagre from 'dagre';
 
-export type Layoutable = { id: string; parentId: string | null };
+export type Layoutable = {
+  id: string;
+  parentId: string | null;
+  /** Optional per-node size; falls back to the nodeWidth/nodeHeight options. */
+  width?: number;
+  height?: number;
+};
 export type LayoutDirection = 'TB' | 'LR';
 
 export type LayoutOptions = {
@@ -31,7 +37,7 @@ export function layoutTree<T extends Layoutable>(
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const n of nodes) {
-    g.setNode(n.id, { width: nodeWidth, height: nodeHeight });
+    g.setNode(n.id, { width: n.width ?? nodeWidth, height: n.height ?? nodeHeight });
   }
   const edges: Array<{ id: string; source: string; target: string }> = [];
   for (const n of nodes) {
@@ -45,7 +51,9 @@ export function layoutTree<T extends Layoutable>(
 
   const laid = nodes.map((n) => {
     const pos = g.node(n.id);
-    return { ...n, x: pos.x - nodeWidth / 2, y: pos.y - nodeHeight / 2 };
+    const w = n.width ?? nodeWidth;
+    const h = n.height ?? nodeHeight;
+    return { ...n, x: pos.x - w / 2, y: pos.y - h / 2 };
   });
 
   return { nodes: laid, edges };

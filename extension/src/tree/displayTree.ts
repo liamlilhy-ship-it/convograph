@@ -3,39 +3,43 @@ import type { NodePreview } from './preview';
 import { siblingHighlights } from './siblingDiff';
 
 /**
- * A DisplayNode pairs a human question with one of its assistant answers.
- * Two divergence scenarios both produce sibling DisplayNodes:
- *   - Edit (different Q, different A): two humans share a parent assistant.
- *     Each (H_i, A_i) becomes its own card; cards have different Q text.
- *   - Regenerate (same Q, different A): one human has multiple assistant
- *     children. Each (H, A_i) becomes its own card; cards share Q text.
- * In both cases the tree visibly diverges at this turn.
+ * A DisplayNode is a single conversation message — either a question (human) or
+ * an answer (assistant). Each turn of the chat becomes TWO display nodes wired
+ * `… A(prev) → Q(this) → A(this) → Q(next) …`.
+ *
+ * Branches:
+ *   - Edit (different Q): an answer node has multiple question children, each
+ *     with different text and `branchKind: 'edit'`.
+ *   - Regenerate (same Q, different A): the single question message is
+ *     DUPLICATED once per answer branch — each duplicate question node carries
+ *     `branchKind: 'regenerate'` and leads to exactly one answer, so a click
+ *     resolves to a single, unambiguous branch.
  */
+export type DisplayRole = 'human' | 'assistant';
+export type BranchKind = 'regenerate' | 'edit' | null;
+
 export type DisplayNode = {
-  id: string;                    // `${humanId}::${assistantId | 'pending'}`
-  humanId: string;
-  assistantId: string | null;    // null while a reply is in flight / aborted
-  /** A concrete leaf MESSAGE uuid under this node (no children). This is what
-   *  claude.ai's current_leaf_message_uuid must be set to — the node's own
-   *  message id is rejected when it has descendants. */
-  leafId: string;
+  id: string; // `${pairId}::q` or `${pairId}::a`
+  role: DisplayRole;
   parentId: string | null;
   childIds: string[];
-  humanSnippet: string;
-  humanFullText: string;
-  humanPreview: NodePreview;
-  assistantSnippet: string;
-  assistantFullText: string;
-  assistantPreview: NodePreview;
+  preview: NodePreview;
+  fullText: string;
+  /** Question text of this turn (the human message). Same on the question node
+   *  AND its answer node, so clicking either centers the question bubble. */
+  questionText: string;
+  /** A concrete leaf MESSAGE uuid for this branch — what current_leaf must be
+   *  set to. Shared by the turn's question and answer nodes. */
+  leafId: string;
   isOnActivePath: boolean;
+  /** Branch position of this TURN (carried on both the question and answer). */
   siblingIndex: number;
   siblingCount: number;
+  /** Set on question nodes only: 'regenerate' (Q shared with a sibling) |
+   *  'edit' (>1 sibling, different Q) | null. Drives the tag/badge. */
+  branchKind: BranchKind;
   depth: number;
   createdAt: number;
-  /** True when the human Q is identical to at least one sibling's Q
-   *  (i.e. this group is a regenerate, not an edit). Useful for optional
-   *  visual de-emphasis of the repeated question. */
-  shareQWithSiblings: boolean;
 };
 
 export type DisplayTree = {
@@ -43,6 +47,31 @@ export type DisplayTree = {
   roots: DisplayNode[];
   activePath: string[];
   orderedNodes: DisplayNode[];
+};
+
+/**
+ * Internal: one (human, assistant-child) turn pair. This is the intermediate
+ * structure that carries all the branch/leaf/active-path/sibling-diff logic;
+ * `buildDisplayTree` then explodes each pair into a question + answer node.
+ */
+type TurnPair = {
+  id: string; // `${humanId}::${assistantId | 'pending'}`
+  humanId: string;
+  assistantId: string | null;
+  leafId: string;
+  parentId: string | null;
+  childIds: string[];
+  humanFullText: string;
+  humanPreview: NodePreview;
+  assistantFullText: string;
+  assistantPreview: NodePreview;
+  isOnActivePath: boolean;
+  siblingIndex: number;
+  siblingCount: number;
+  createdAt: number;
+  /** True when the human Q is identical to at least one sibling's Q (i.e. this
+   *  group is a regenerate, not an edit). */
+  shareQWithSiblings: boolean;
 };
 
 const PENDING = 'pending';
@@ -109,11 +138,11 @@ function descendToLeaf(startId: string, built: BuiltTree): string {
 }
 
 export function buildDisplayTree(built: BuiltTree): DisplayTree {
-  const byId = new Map<string, DisplayNode>();
+  const pairById = new Map<string, TurnPair>();
   const pairsByHuman = new Map<string, string[]>();
 
-  // Pass 1: create a DisplayNode for every (human, assistant-child) pair.
-  // Humans with no assistant child still get a (H, null) pending card.
+  // Pass 1: create a pair for every (human, assistant-child). Humans with no
+  // assistant child still get a (H, null) pending pair.
   for (const node of built.orderedNodes) {
     if (node.sender !== 'human') continue;
     const assistantChildren = node.childIds
@@ -123,23 +152,20 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
 
     if (assistantChildren.length === 0) {
       const id = pairId(node.id, null);
-      byId.set(id, {
+      pairById.set(id, {
         id,
         humanId: node.id,
         assistantId: null,
         leafId: descendToLeaf(node.id, built),
         parentId: null,
         childIds: [],
-        humanSnippet: node.preview.title,
         humanFullText: node.fullText,
         humanPreview: node.preview,
-        assistantSnippet: '',
         assistantFullText: '',
         assistantPreview: emptyPreview(),
         isOnActivePath: false,
         siblingIndex: 0,
         siblingCount: 1,
-        depth: 0,
         createdAt: node.createdAt,
         shareQWithSiblings: false,
       });
@@ -149,24 +175,21 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
       for (const a of assistantChildren) {
         const id = pairId(node.id, a.id);
         ids.push(id);
-        byId.set(id, {
+        pairById.set(id, {
           id,
           humanId: node.id,
           assistantId: a.id,
           leafId: descendToLeaf(a.id, built),
           parentId: null,
           childIds: [],
-          humanSnippet: node.preview.title,
           humanFullText: node.fullText,
           humanPreview: node.preview,
-          assistantSnippet: a.preview.title,
           assistantFullText: a.fullText,
           // Clone so sibling-diff writes don't mutate the shared TreeNode preview.
           assistantPreview: { ...a.preview, highlights: [] },
           isOnActivePath: false,
           siblingIndex: 0,
           siblingCount: 1,
-          depth: 0,
           createdAt: a.createdAt,
           shareQWithSiblings: assistantChildren.length > 1,
         });
@@ -175,12 +198,12 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
     }
   }
 
-  // Sibling diff pass: for each regenerate group (one human → multiple
-  // assistant children), compute the 1–2 most distinctive tokens per card and
-  // store them as highlights on the assistant preview.
-  for (const [humanId, displayIds] of pairsByHuman) {
+  // Sibling diff: for each regenerate group (one human → multiple assistant
+  // children), compute the 1–2 most distinctive tokens per answer and store
+  // them as highlights on the assistant preview.
+  for (const [, displayIds] of pairsByHuman) {
     if (displayIds.length < 2) continue;
-    const dns = displayIds.map((d) => byId.get(d)!);
+    const dns = displayIds.map((d) => pairById.get(d)!);
     if (!dns.every((d) => d.shareQWithSiblings && d.assistantId)) continue;
     const texts = dns.map((d) => d.assistantFullText);
     const highlightsByCard = siblingHighlights(texts);
@@ -190,14 +213,13 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
         highlights: highlightsByCard[i] ?? [],
       };
     }
-    void humanId;
   }
 
-  // Pass 2: wire parent/child between DisplayNodes.
-  // The parent of (H, A) is the DisplayNode whose assistantId === H.parentId
-  // (i.e. the prior turn whose assistant message spawned this human Q).
-  for (const dn of byId.values()) {
-    const human = built.byId.get(dn.humanId);
+  // Pass 2: wire parent/child between pairs. The parent of (H, A) is the pair
+  // whose assistantId === H.parentId (the prior turn whose assistant spawned
+  // this human Q).
+  for (const p of pairById.values()) {
+    const human = built.byId.get(p.humanId);
     if (!human) continue;
     const parentAssistantId = human.parentId;
     if (!parentAssistantId) continue;
@@ -207,49 +229,37 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
       ? built.byId.get(parentAssistant.parentId)
       : null;
     if (!grandHuman || grandHuman.sender !== 'human') continue;
-    const parentDisplayId = pairId(grandHuman.id, parentAssistant.id);
-    const parent = byId.get(parentDisplayId);
+    const parentPairId = pairId(grandHuman.id, parentAssistant.id);
+    const parent = pairById.get(parentPairId);
     if (!parent) continue;
-    dn.parentId = parent.id;
-    parent.childIds.push(dn.id);
+    p.parentId = parent.id;
+    parent.childIds.push(p.id);
   }
 
   // Sort children by createdAt for stable layout.
-  for (const dn of byId.values()) {
-    dn.childIds.sort((a, b) => byId.get(a)!.createdAt - byId.get(b)!.createdAt);
+  for (const p of pairById.values()) {
+    p.childIds.sort((a, b) => pairById.get(a)!.createdAt - pairById.get(b)!.createdAt);
   }
 
-  const roots: DisplayNode[] = [];
-  for (const dn of byId.values()) {
-    if (dn.parentId == null) roots.push(dn);
+  const pairRoots: TurnPair[] = [];
+  for (const p of pairById.values()) {
+    if (p.parentId == null) pairRoots.push(p);
   }
-  roots.sort((a, b) => a.createdAt - b.createdAt);
+  pairRoots.sort((a, b) => a.createdAt - b.createdAt);
 
-  // Siblings.
-  for (const dn of byId.values()) {
-    const siblingList = dn.parentId
-      ? byId.get(dn.parentId)!.childIds
-      : roots.map((r) => r.id);
-    dn.siblingCount = siblingList.length;
-    dn.siblingIndex = siblingList.indexOf(dn.id);
+  // Siblings (per pair).
+  for (const p of pairById.values()) {
+    const siblingList = p.parentId
+      ? pairById.get(p.parentId)!.childIds
+      : pairRoots.map((r) => r.id);
+    p.siblingCount = siblingList.length;
+    p.siblingIndex = siblingList.indexOf(p.id);
   }
 
-  // Depths + ordered traversal.
-  const orderedNodes: DisplayNode[] = [];
-  const visit = (id: string, depth: number) => {
-    const n = byId.get(id);
-    if (!n) return;
-    n.depth = depth;
-    orderedNodes.push(n);
-    for (const cid of n.childIds) visit(cid, depth + 1);
-  };
-  for (const r of roots) visit(r.id, 0);
-
-  // Active path: walk the message-level active path *in pairs*. A DisplayNode
-  // spans (H, A_active), so we consume two messages per pair.  Trailing humans
-  // with no assistant child become a pending half-card on the path.
-  void pairsByHuman; // kept for clarity; not needed past this point
-  const activePath: string[] = [];
+  // Active path over pairs: walk the message-level active path in pairs. A pair
+  // spans (H, A_active); trailing humans with no assistant become a pending
+  // pair on the path.
+  const pairActivePath: string[] = [];
   const msgs = built.activePath;
   let i = 0;
   while (i < msgs.length) {
@@ -262,19 +272,93 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
       const next = i + 1 < msgs.length ? built.byId.get(msgs[i + 1]!) : null;
       const isPairableAssistant =
         next && next.sender === 'assistant' && next.parentId === cur.id;
-      const targetId = isPairableAssistant
-        ? pairId(cur.id, next.id)
-        : pairId(cur.id, null);
-      const dn = byId.get(targetId);
-      if (dn) {
-        activePath.push(dn.id);
-        dn.isOnActivePath = true;
+      const targetId = isPairableAssistant ? pairId(cur.id, next.id) : pairId(cur.id, null);
+      const p = pairById.get(targetId);
+      if (p) {
+        pairActivePath.push(p.id);
+        p.isOnActivePath = true;
       }
       i += isPairableAssistant ? 2 : 1;
       continue;
     }
     // Orphan assistant (no preceding human) — skip; shouldn't normally happen.
     i++;
+  }
+
+  // ---- Explode each pair into a question node + (optional) answer node ----
+  const byId = new Map<string, DisplayNode>();
+  for (const p of pairById.values()) {
+    const qId = `${p.id}::q`;
+    const aId = `${p.id}::a`;
+    const hasAnswer = p.assistantId != null;
+    const branchKind: BranchKind = p.shareQWithSiblings
+      ? 'regenerate'
+      : p.siblingCount > 1
+        ? 'edit'
+        : null;
+
+    byId.set(qId, {
+      id: qId,
+      role: 'human',
+      parentId: p.parentId ? `${p.parentId}::a` : null,
+      childIds: hasAnswer ? [aId] : [],
+      preview: p.humanPreview,
+      fullText: p.humanFullText,
+      questionText: p.humanFullText,
+      leafId: p.leafId,
+      isOnActivePath: p.isOnActivePath,
+      siblingIndex: p.siblingIndex,
+      siblingCount: p.siblingCount,
+      branchKind,
+      depth: 0,
+      createdAt: p.createdAt,
+    });
+
+    if (hasAnswer) {
+      byId.set(aId, {
+        id: aId,
+        role: 'assistant',
+        parentId: qId,
+        childIds: p.childIds.map((c) => `${c}::q`),
+        preview: p.assistantPreview,
+        fullText: p.assistantFullText,
+        questionText: p.humanFullText,
+        leafId: p.leafId,
+        isOnActivePath: p.isOnActivePath,
+        siblingIndex: p.siblingIndex,
+        siblingCount: p.siblingCount,
+        branchKind: null,
+        depth: 0,
+        createdAt: p.createdAt,
+      });
+    }
+  }
+
+  // Roots: question nodes of root pairs.
+  const roots: DisplayNode[] = [];
+  for (const dn of byId.values()) {
+    if (dn.parentId == null) roots.push(dn);
+  }
+  roots.sort((a, b) => a.createdAt - b.createdAt);
+
+  // Depths + ordered traversal over display nodes.
+  const orderedNodes: DisplayNode[] = [];
+  const visit = (id: string, depth: number) => {
+    const n = byId.get(id);
+    if (!n) return;
+    n.depth = depth;
+    orderedNodes.push(n);
+    for (const cid of n.childIds) visit(cid, depth + 1);
+  };
+  for (const r of roots) visit(r.id, 0);
+
+  // Active path: explode the pair-level active path in order (Q then A).
+  const activePath: string[] = [];
+  for (const pid of pairActivePath) {
+    const p = pairById.get(pid);
+    if (!p) continue;
+    activePath.push(`${pid}::q`);
+    if (p.assistantId != null) activePath.push(`${pid}::a`);
   }
 
   return { byId, roots, activePath, orderedNodes };
