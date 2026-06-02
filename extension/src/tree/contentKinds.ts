@@ -12,8 +12,19 @@ export type FileRef = { name: string; type?: string; size?: number; url?: string
  * cheap-to-thumbnail SVG case versus arbitrary HTML (sandboxed-iframe only).
  */
 export type WidgetRef = { title?: string; code: string; isSvg: boolean };
+/**
+ * A file Claude generated and presented at the end of an answer (claude.ai's
+ * `present_files` tool). The bytes live only in the sandbox — there's no URL —
+ * so we carry just the name + type and open claude's own preview on click.
+ */
+export type ArtifactRef = { name: string; type?: string };
 /** Media extracted from a message's non-text fields, passed into detectKinds. */
-export type MediaRefs = { images: ImageRef[]; files: FileRef[]; widgets?: WidgetRef[] };
+export type MediaRefs = {
+  images: ImageRef[];
+  files: FileRef[];
+  widgets?: WidgetRef[];
+  artifacts?: ArtifactRef[];
+};
 
 export type ContentKind =
   | { kind: 'code'; language?: string; blockCount: number; dominant: boolean; snippet: string }
@@ -22,7 +33,8 @@ export type ContentKind =
   | { kind: 'image'; count: number; images: ImageRef[] }
   | { kind: 'attachment'; count: number; files: FileRef[] }
   | { kind: 'links'; count: number; items: LinkItem[] }
-  | { kind: 'widget'; count: number; widgets: WidgetRef[] };
+  | { kind: 'widget'; count: number; widgets: WidgetRef[] }
+  | { kind: 'artifact'; count: number; items: ArtifactRef[] };
 
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
 const LIST_LINE_RE = /^\s*(?:[-*+]\s+|\d+\.\s+)/;
@@ -106,6 +118,13 @@ export function detectKinds(
   const widgets = media?.widgets ?? [];
   if (widgets.length) {
     kinds.push({ kind: 'widget', count: widgets.length, widgets });
+  }
+
+  // Generated artifacts presented at the end of an answer (claude.ai's
+  // `present_files`). Document/HTML/etc. outputs the assistant created.
+  const artifacts = media?.artifacts ?? [];
+  if (artifacts.length) {
+    kinds.push({ kind: 'artifact', count: artifacts.length, items: artifacts });
   }
 
   // Link-heavy text (don't double-count those inside code fences)

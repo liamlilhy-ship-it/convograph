@@ -150,9 +150,16 @@
   cursor: pointer;
   overflow: hidden;
   pointer-events: auto;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease, transform 120ms ease, opacity 120ms ease;
 }
-.cg-node:hover { border-color: var(--cg-accent); }
+/* Cards off the active path are dimmed so the selected (active) path stands out.
+   Hovering a dimmed card restores it to full strength to signal interactivity. */
+.cg-node[data-active="false"]:not(:hover) { opacity: 0.5; }
+.cg-node:hover {
+  border-color: var(--cg-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(31, 30, 29, 0.14);
+}
 .cg-node[data-active="true"] {
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
@@ -176,7 +183,7 @@
   background: var(--cg-border);
 }
 
-.cg-node .cg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
+.cg-node .cg-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
 .cg-node .cg-tag {
   font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
@@ -200,8 +207,8 @@
   word-break: break-word;
 }
 /* Question half: keep a few lines of context. Answer half: longer body. */
-.cg-node .cg-title { -webkit-line-clamp: 4; font-weight: 500; }
-.cg-node .cg-body { -webkit-line-clamp: 4; opacity: 0.92; }
+.cg-node .cg-title { -webkit-line-clamp: 5; font-weight: 500; }
+.cg-node .cg-body { -webkit-line-clamp: 5; opacity: 0.92; }
 /* When this turn's Q is shared with siblings (regenerate), dim slightly */
 .cg-node .cg-snippet[data-shared="true"] { opacity: 0.72; }
 
@@ -309,16 +316,47 @@
 }
 .cg-node .cg-badge svg { flex-shrink: 0; }
 
-/* Bottom thumbnail strip — every image + visualization across the card, one
-   uniform tile size, single row pinned to the card bottom. `margin-top:auto`
-   absorbs slack so it always hugs the bottom edge. */
+/* Bottom footer — generated-artifact rows stacked above the thumbnail strip,
+   sharing ONE top separator. `margin-top:auto` pins the block to the card's
+   bottom edge (artifacts sit in the same area as the images, above them). */
+.cg-node .cg-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--cg-border);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Generated-artifact rows — static display of files Claude produced. */
+.cg-node .cg-artifacts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cg-node .cg-artifact {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--cg-border);
+  border-radius: 6px;
+  background: var(--cg-bg);
+  color: inherit;
+  font-size: 11px;
+}
+.cg-node .cg-artifact svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
+/* Full filename always visible: wrap instead of truncating. */
+.cg-node .cg-artifact-name { flex: 1; min-width: 0; word-break: break-word; }
+.cg-node .cg-artifact-type { flex-shrink: 0; margin-top: 1px; font-size: 10px; }
+
+/* Thumbnail strip — every image + visualization across the card, one uniform
+   tile size, single row. */
 .cg-node .cg-thumbstrip {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 12px;
-  margin-top: auto;
-  border-top: 1px solid var(--cg-border);
 }
 .cg-node .cg-thumb-more { font-size: 11px; flex-shrink: 0; }
 
@@ -369,23 +407,21 @@
   overflow: hidden;
 }
 
-/* File badges (filename + type/size; clickable when a URL exists) */
+/* Uploaded-file rows (filename + type/size) — static display, full name shown. */
 .cg-node .cg-files { display: flex; flex-direction: column; gap: 3px; }
 .cg-node .cg-file {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 5px;
+  width: 100%;
   padding: 3px 6px;
   border: 1px solid var(--cg-border);
   border-radius: 6px;
   font-size: 11px;
   color: inherit;
-  text-decoration: none;
-  overflow: hidden;
 }
-a.cg-file:hover { border-color: var(--cg-accent); }
-.cg-node .cg-file svg { flex-shrink: 0; color: var(--cg-fg-muted); }
-.cg-node .cg-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-node .cg-file svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
+.cg-node .cg-file-name { flex: 1; min-width: 0; word-break: break-word; }
 .cg-node .cg-file-meta { flex-shrink: 0; font-size: 10px; }
 
 /* Enlarged visualization preview — shown while hovering a node's thumbnail. */

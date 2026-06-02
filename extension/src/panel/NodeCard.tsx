@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
-import type { ContentKind, WidgetRef } from '../tree/contentKinds';
+import type { ContentKind, WidgetRef, ArtifactRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
-import { CodeIcon, ImageIcon, AttachmentIcon, LinkIcon } from './icons';
+import { CodeIcon, ImageIcon, AttachmentIcon, LinkIcon, FileIcon } from './icons';
 import { svgDataUri, type PreviewItem } from './HoverPreview';
 
 type HoverApi = {
@@ -64,7 +64,58 @@ export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, styl
         </div>
         <RichKinds preview={a} />
       </div>
-      <ThumbStrip thumbs={collectThumbs(node.humanPreview, a)} hover={hover} />
+      <Footer
+        artifacts={collectArtifacts(a)}
+        thumbs={collectThumbs(node.humanPreview, a)}
+        hover={hover}
+      />
+    </div>
+  );
+}
+
+/** Bottom footer: generated-artifact rows stacked above the thumbnail strip.
+ *  `margin-top:auto` (in CSS) pins the whole block to the card's bottom edge. */
+function Footer({
+  artifacts,
+  thumbs,
+  hover,
+}: {
+  artifacts: ArtifactRef[];
+  thumbs: Thumb[];
+  hover: HoverApi;
+}) {
+  if (!artifacts.length && !thumbs.length) return null;
+  return (
+    <div className="cg-foot">
+      <ArtifactStrip artifacts={artifacts} />
+      <ThumbStrip thumbs={thumbs} hover={hover} />
+    </div>
+  );
+}
+
+/** Flatten generated artifacts across previews, in order. */
+function collectArtifacts(...previews: NodePreview[]): ArtifactRef[] {
+  const out: ArtifactRef[] = [];
+  for (const p of previews) {
+    for (const k of p.kinds) {
+      if (k.kind === 'artifact') out.push(...k.items);
+    }
+  }
+  return out;
+}
+
+/** Static rows listing the files Claude generated (full name + type). */
+function ArtifactStrip({ artifacts }: { artifacts: ArtifactRef[] }) {
+  if (!artifacts.length) return null;
+  return (
+    <div className="cg-artifacts">
+      {artifacts.map((af, i) => (
+        <div key={i} className="cg-artifact" title={af.name}>
+          <FileIcon size={12} />
+          <span className="cg-artifact-name">{af.name}</span>
+          {af.type && <span className="cg-muted cg-artifact-type">{prettyType(af.type)}</span>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -176,8 +227,9 @@ function RichKinds({ preview }: { preview: NodePreview }) {
   let heavy = 0;
   const out: ReactNode[] = [];
   for (const k of ordered) {
-    // Images and widgets render as uniform tiles in the bottom thumbnail strip.
-    if (k.kind === 'image' || k.kind === 'widget') continue;
+    // Images/widgets render in the thumbnail strip; artifacts in their own
+    // strip — both live in the bottom footer, not here.
+    if (k.kind === 'image' || k.kind === 'widget' || k.kind === 'artifact') continue;
     const isHeavy = k.kind === 'code' || k.kind === 'table' || k.kind === 'list' || k.kind === 'links';
     if (isHeavy) {
       if (heavy >= MAX_RICH) continue;
@@ -198,6 +250,7 @@ function chipKey(k: ContentKind): string {
     case 'attachment': return `attachment:${k.count}`;
     case 'links': return `links:${k.count}`;
     case 'widget': return `widget:${k.count}`;
+    case 'artifact': return `artifact:${k.count}`;
   }
 }
 
@@ -270,19 +323,7 @@ function KindBlock({ kind }: { kind: ContentKind }) {
                 {fileMeta(f) && <span className="cg-muted cg-file-meta">{fileMeta(f)}</span>}
               </>
             );
-            return f.url ? (
-              <a
-                key={i}
-                className="cg-file"
-                href={f.url}
-                target="_blank"
-                rel="noreferrer"
-                title={f.name}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {inner}
-              </a>
-            ) : (
+            return (
               <div key={i} className="cg-file" title={f.name}>
                 {inner}
               </div>

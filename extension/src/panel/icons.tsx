@@ -84,6 +84,15 @@ export function LinkIcon(p: IconProps) {
   );
 }
 
+export function FileIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M8 1.5H3.75A1.25 1.25 0 0 0 2.5 2.75v8.5a1.25 1.25 0 0 0 1.25 1.25h6.5a1.25 1.25 0 0 0 1.25-1.25V5z" />
+      <polyline points="8 1.5 8 5 11.5 5" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon(p: IconProps) {
   return (
     <svg {...svgProps(p)}>

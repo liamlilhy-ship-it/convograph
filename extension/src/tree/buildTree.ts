@@ -1,6 +1,6 @@
 import type { ApiConversation, ApiMessage } from '../api/types';
 import { computeNodePreview, type NodePreview } from './preview';
-import type { ImageRef, FileRef, WidgetRef, MediaRefs } from './contentKinds';
+import type { ImageRef, FileRef, WidgetRef, ArtifactRef, MediaRefs } from './contentKinds';
 
 export type TreeNode = {
   id: string;
@@ -41,21 +41,43 @@ function textOf(msg: ApiMessage): string {
  * shows exactly once. Other providers get their own adapter producing the same
  * shape.
  */
+const ARTIFACT_IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif']);
+
 function mediaOf(msg: ApiMessage): MediaRefs {
   const images: ImageRef[] = [];
   const files: FileRef[] = [];
   const widgets: WidgetRef[] = [];
+  const artifacts: ArtifactRef[] = [];
+  const seenArtifact = new Set<string>();
   const seen = new Set<string>();
 
   // Visualizations rendered inline by a tool (claude.ai's `visualize:show_widget`).
   // The markup lives in the tool_use input and is never echoed into a file array,
   // so we pull it straight from the content blocks.
   for (const c of msg.content ?? []) {
-    if (c.type !== 'tool_use' || c.name !== 'visualize:show_widget') continue;
-    const code = typeof c.input?.widget_code === 'string' ? c.input.widget_code : '';
-    if (!code) continue;
-    const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
-    widgets.push({ title, code, isSvg: code.trim().startsWith('<svg') });
+    if (c.type !== 'tool_use') continue;
+    if (c.name === 'visualize:show_widget') {
+      const code = typeof c.input?.widget_code === 'string' ? c.input.widget_code : '';
+      if (!code) continue;
+      const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
+      widgets.push({ title, code, isSvg: code.trim().startsWith('<svg') });
+    } else if (c.name === 'present_files') {
+      // Files Claude generated and surfaced as links at the end of the answer.
+      // These never appear in the file arrays (no URL) — only their sandbox
+      // paths are listed. Image outputs DO land in the file arrays (handled
+      // below as thumbnails), so skip image extensions here to avoid dupes.
+      const raw = c.input?.filepaths;
+      const paths = Array.isArray(raw) ? raw : [];
+      for (const p of paths) {
+        if (typeof p !== 'string') continue;
+        const name = p.split('/').pop() || p;
+        const type = typeFromName(name);
+        if (type && ARTIFACT_IMAGE_EXT.has(type)) continue;
+        if (seenArtifact.has(name)) continue;
+        seenArtifact.add(name);
+        artifacts.push({ name, type });
+      }
+    }
   }
 
   const take = (key: string | null): boolean => {
@@ -96,7 +118,7 @@ function mediaOf(msg: ApiMessage): MediaRefs {
     }
   }
 
-  return { images, files, widgets };
+  return { images, files, widgets, artifacts };
 }
 
 /** Derives a display type from a filename extension (e.g. "report.pdf" → "pdf"). */
