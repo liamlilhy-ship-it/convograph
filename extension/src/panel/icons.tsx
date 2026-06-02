@@ -132,3 +132,15 @@ export function RegenIcon(p: IconProps) {
     </svg>
   );
 }
+
+/** Diagonal-expand glyph — opens a node's full-content preview. */
+export function ExpandIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <polyline points="8.5 2.5 11.5 2.5 11.5 5.5" />
+      <polyline points="5.5 11.5 2.5 11.5 2.5 8.5" />
+      <line x1="11.5" y1="2.5" x2="7.5" y2="6.5" />
+      <line x1="2.5" y1="11.5" x2="6.5" y2="7.5" />
+    </svg>
+  );
+}

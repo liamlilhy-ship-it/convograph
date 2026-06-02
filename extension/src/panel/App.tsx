@@ -3,6 +3,7 @@ import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromU
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
+import { PreviewLayer, type OpenPreview, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
 import { jumpToNode } from '../navigation/jumpToNode';
@@ -45,11 +46,76 @@ export function App() {
   const [dragging, setDragging] = useState(false);
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
   const orgIdRef = useRef<string | null>(null);
   const reqRef = useRef(0);
+  const cascadeRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
 
   usePagePushRight(open, panelW);
+
+  // ---- Full-preview windows ----
+  const openPreview = useCallback((node: DisplayNode) => {
+    setOpenPreviews((prev) => {
+      // Reopen → focus (move to end of the stack) instead of duplicating.
+      const existing = prev.find((p) => p.key === node.id);
+      if (existing) return [...prev.filter((p) => p.key !== node.id), existing];
+      const W = 560;
+      const H = 520;
+      const step = (cascadeRef.current++ % 6) * 28; // cascade so windows never spawn exactly stacked
+      const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
+      const y = Math.max(0, Math.min(72 + step, window.innerHeight - H - 16));
+      return [...prev, { key: node.id, node, x, y, w: W, h: H }];
+    });
+  }, []);
+
+  const closePreview = useCallback((key: string) => {
+    setOpenPreviews((prev) => prev.filter((p) => p.key !== key));
+  }, []);
+
+  const focusPreview = useCallback((key: string) => {
+    setOpenPreviews((prev) => {
+      const i = prev.findIndex((p) => p.key === key);
+      if (i < 0 || i === prev.length - 1) return prev; // already on top
+      return [...prev.slice(0, i), ...prev.slice(i + 1), prev[i]!];
+    });
+  }, []);
+
+  const setPreviewGeometry = useCallback((key: string, geo: Geometry) => {
+    setOpenPreviews((prev) => prev.map((p) => (p.key === key ? { ...p, ...geo } : p)));
+  }, []);
+
+  // Tile all open windows into a grid across the area left of the side panel.
+  const tidyPreviews = useCallback(() => {
+    setOpenPreviews((prev) => {
+      const n = prev.length;
+      if (n === 0) return prev;
+      const cols = Math.ceil(Math.sqrt(n));
+      const rows = Math.ceil(n / cols);
+      const gap = 12;
+      const areaW = Math.max(320, window.innerWidth - panelW - 2 * gap);
+      const areaH = window.innerHeight - 2 * gap;
+      const cellW = (areaW - gap * (cols - 1)) / cols;
+      const cellH = (areaH - gap * (rows - 1)) / rows;
+      return prev.map((p, idx) => {
+        const c = idx % cols;
+        const r = Math.floor(idx / cols);
+        return {
+          ...p,
+          x: gap + c * (cellW + gap),
+          y: gap + r * (cellH + gap),
+          w: Math.max(300, Math.round(cellW)),
+          h: Math.max(200, Math.round(cellH)),
+        };
+      });
+    });
+  }, [panelW]);
+
+  // Previews belong to graph mode — clear them when the panel closes (which also
+  // fires on chat switch, since that closes the panel).
+  useEffect(() => {
+    if (!open) setOpenPreviews([]);
+  }, [open]);
 
   // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
   // scroll, layout shifts, and on panel open/close (because the composer moves
@@ -223,6 +289,9 @@ export function App() {
           <div className="cg-toolbar">
             <h1>Conversation graph</h1>
             <div className="cg-spacer" />
+            {openPreviews.length > 1 && (
+              <button onClick={tidyPreviews} title="Tidy previews">⊞</button>
+            )}
             <button onClick={() => setDirection((d) => (d === 'TB' ? 'LR' : 'TB'))} title="Switch orientation">
               {direction === 'TB' ? '↓' : '→'}
             </button>
@@ -242,6 +311,7 @@ export function App() {
               tree={status.tree}
               direction={direction}
               onNodeClick={handleNodeClick}
+              onOpenPreview={openPreview}
               jumpingId={jumping}
             />
           ) : (
@@ -257,6 +327,14 @@ export function App() {
           )}
           {toast && <div className="cg-toast">{toast}</div>}
         </aside>
+      )}
+      {open && (
+        <PreviewLayer
+          previews={openPreviews}
+          onClose={closePreview}
+          onFocus={focusPreview}
+          onGeometry={setPreviewGeometry}
+        />
       )}
     </>
   );

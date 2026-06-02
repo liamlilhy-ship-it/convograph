@@ -11,8 +11,10 @@ import {
   UserIcon,
   ClaudeIcon,
   RegenIcon,
+  ExpandIcon,
 } from './icons';
-import { svgDataUri, type PreviewItem } from './HoverPreview';
+import { type PreviewItem } from './HoverPreview';
+import { svgDataUri } from './widgetRender';
 
 type HoverApi = {
   onPreview: (item: PreviewItem, rect: DOMRect) => void;
@@ -23,6 +25,7 @@ export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
   onClick: (node: DisplayNode) => void;
+  onOpenPreview: (node: DisplayNode) => void;
   style?: CSSProperties;
 };
 
@@ -33,7 +36,7 @@ export function hasMedia(p: NodePreview): boolean {
   );
 }
 
-export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, style }: NodeCardProps) {
+export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, onOpenPreview, style }: NodeCardProps) {
   const isHuman = node.role === 'human';
   const p = node.preview;
   const text = isHuman ? p.title : p.body || p.title;
@@ -71,6 +74,18 @@ export function NodeCard({ node, jumping, onPreview, onPreviewEnd, onClick, styl
             {node.siblingIndex + 1}/{node.siblingCount}
           </span>
         )}
+        <button
+          type="button"
+          className="cg-pv-btn"
+          title="Open full preview"
+          aria-label="Open full preview"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenPreview(node);
+          }}
+        >
+          <ExpandIcon size={12} />
+        </button>
       </div>
       <div className="cg-body">
         <div className="cg-content">

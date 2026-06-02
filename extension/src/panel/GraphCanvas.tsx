@@ -20,6 +20,7 @@ type CgNodeData = {
   onPreview: (item: PreviewItem, r: DOMRect) => void;
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
+  onOpenPreview: (n: DisplayNode) => void;
 };
 
 // Single-role cards come in two fixed height tiers so same-content nodes match.
@@ -44,6 +45,7 @@ const NODE_TYPES = {
       onPreview={data.onPreview}
       onPreviewEnd={data.onPreviewEnd}
       onClick={data.onClick}
+      onOpenPreview={data.onOpenPreview}
     />
   ),
 };
@@ -52,10 +54,11 @@ export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
   onNodeClick: (node: DisplayNode) => void;
+  onOpenPreview: (node: DisplayNode) => void;
   jumpingId?: string | null;
 };
 
-export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: GraphCanvasProps) {
+export function GraphCanvas({ tree, direction = 'TB', onNodeClick, onOpenPreview, jumpingId }: GraphCanvasProps) {
   const [hover, setHover] = useState<{ item: PreviewItem; anchor: DOMRect } | null>(null);
   const hoverTimer = useRef<number | null>(null);
 
@@ -131,6 +134,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
         onPreview: handlePreview,
         onPreviewEnd: handlePreviewEnd,
         onClick: onNodeClick,
+        onOpenPreview,
       },
       draggable: false,
       selectable: false,
@@ -167,7 +171,7 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       ];
     }
     return { nodes: rfNodes, edges: rfEdges, translateExtent: extent };
-  }, [tree, direction, jumpingId, handlePreview, handlePreviewEnd, onNodeClick]);
+  }, [tree, direction, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview]);
 
   // A vertical (TB) chat tree is tall-and-narrow; a portrait minimap shows its
   // top-to-bottom structure instead of crushing it into a landscape sliver.
