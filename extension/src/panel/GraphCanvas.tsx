@@ -4,6 +4,8 @@ import {
   Background,
   Controls,
   MiniMap,
+  Handle,
+  Position,
   type Node,
   type Edge,
   ReactFlowProvider,
@@ -17,6 +19,10 @@ type CgNodeData = {
   node: DisplayNode;
   jumping: boolean;
   height: number;
+  // Handle sides follow the layout direction so edges anchor (and smoothstep-route)
+  // from the correct card edges: TB enters top / leaves bottom, LR enters left / leaves right.
+  targetPos: Position;
+  sourcePos: Position;
   onPreview: (item: PreviewItem, r: DOMRect) => void;
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
@@ -36,15 +42,21 @@ function tierHeight(n: DisplayNode): number {
 }
 
 const NODE_TYPES = {
+  // Hidden handles (styled away in panel.css) give React Flow the anchor points it
+  // needs to actually draw the parent→child edges to/from our custom card.
   cgNode: ({ data }: { data: CgNodeData }) => (
-    <NodeCard
-      node={data.node}
-      jumping={data.jumping}
-      style={{ height: data.height }}
-      onPreview={data.onPreview}
-      onPreviewEnd={data.onPreviewEnd}
-      onClick={data.onClick}
-    />
+    <>
+      <Handle type="target" position={data.targetPos} isConnectable={false} />
+      <NodeCard
+        node={data.node}
+        jumping={data.jumping}
+        style={{ height: data.height }}
+        onPreview={data.onPreview}
+        onPreviewEnd={data.onPreviewEnd}
+        onClick={data.onClick}
+      />
+      <Handle type="source" position={data.sourcePos} isConnectable={false} />
+    </>
   ),
 };
 
@@ -114,6 +126,9 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
     const sized = tree.orderedNodes.map((n) => ({ ...n, width: NODE_W, height: tierHeight(n) }));
     const { nodes: laid, edges } = layoutTree(sized, { direction });
     const activeSet = new Set(tree.activePath);
+    const isTB = direction === 'TB';
+    const targetPos = isTB ? Position.Top : Position.Left;
+    const sourcePos = isTB ? Position.Bottom : Position.Right;
     const rfNodes: Node[] = laid.map((n) => ({
       id: n.id,
       type: 'cgNode',
@@ -124,10 +139,21 @@ export function GraphCanvas({ tree, direction = 'TB', onNodeClick, jumpingId }: 
       // size) so both have real bounds to work from.
       initialWidth: n.width,
       initialHeight: n.height,
+      // Seed static handle geometry too: the same shadow-root quirk that skips
+      // dimension measurement also skips React Flow's DOM handle measurement, so
+      // `internals.handleBounds` stays empty. Providing `handles` gives the edge
+      // router concrete anchor points (edge-center of each card) and lets edges
+      // draw on first paint without depending on measurement.
+      handles: [
+        { type: 'target' as const, position: targetPos, x: isTB ? n.width / 2 : 0, y: isTB ? 0 : n.height / 2, width: 1, height: 1 },
+        { type: 'source' as const, position: sourcePos, x: isTB ? n.width / 2 : n.width, y: isTB ? n.height : n.height / 2, width: 1, height: 1 },
+      ],
       data: {
         node: n,
         jumping: jumpingId === n.id,
         height: n.height,
+        targetPos,
+        sourcePos,
         onPreview: handlePreview,
         onPreviewEnd: handlePreviewEnd,
         onClick: onNodeClick,
