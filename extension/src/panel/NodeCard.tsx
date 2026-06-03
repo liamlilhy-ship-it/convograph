@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import { renderMarkdown } from './markdown';
+import { formatModelName } from './modelName';
 import type { ContentKind, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import {
@@ -43,6 +44,10 @@ export type DraftView = {
   status: 'editing' | 'generating';
   /** Live-streamed answer text while generating (progressive enhancement). */
   streamText?: string;
+  /** The conversation's current model id (e.g. "claude-opus-4-8"). This is what
+   *  a new completion uses, so it's shown on the editable inputs and the streaming
+   *  answer to tell the user which model will produce / is producing the reply. */
+  model?: string | null;
 };
 
 export type NodeCardProps = HoverApi & {
@@ -276,6 +281,16 @@ export function DraftQuestionCard({
           <UserIcon size={12} />
           You
         </span>
+        {/* The model that will answer this draft (the conversation's current model).
+            Shown on the editable inputs (edit / follow-up) only. */}
+        {showEditor && draft.model && (
+          <span
+            className="cg-model"
+            title={`New answer will use the conversation's current model · ${draft.model}`}
+          >
+            {formatModelName(draft.model)}
+          </span>
+        )}
         {/* No "regen" tag here on purpose: the draft mirrors the original question
             while generating; the tag appears on the real branch after it lands. */}
       </div>
@@ -306,10 +321,13 @@ export function DraftQuestionCard({
  */
 export function DraftAnswerCard({
   streamText,
+  model,
   style,
   onCancel,
 }: {
   streamText?: string;
+  /** Conversation's current model id — shown so the user knows what's generating. */
+  model?: string | null;
   style?: CSSProperties;
   onCancel: () => void;
 }) {
@@ -330,6 +348,14 @@ export function DraftAnswerCard({
           Claude
         </span>
         <span className="cg-busy">Generating…</span>
+        {model && (
+          <span
+            className="cg-model"
+            title={`Generating with the conversation's current model · ${model}`}
+          >
+            {formatModelName(model)}
+          </span>
+        )}
         <div className="cg-head-actions">
           <button type="button" className="cg-editor-btn cg-draft-cancel" onClick={onCancel}>
             Cancel

@@ -60,6 +60,8 @@ type CgDraftQData = {
 
 type CgDraftAData = {
   streamText?: string;
+  /** Conversation's current model id — shown in the streaming answer's header. */
+  model?: string | null;
   width: number;
   height: number;
   targetPos: Position;
@@ -141,6 +143,7 @@ const NODE_TYPES = {
       <Handle type="target" position={data.targetPos} isConnectable={false} />
       <DraftAnswerCard
         streamText={data.streamText}
+        model={data.model}
         style={{ width: data.width, height: data.height }}
         onCancel={data.onCancel}
       />
@@ -394,6 +397,7 @@ export function GraphCanvas({
         selectable: false,
         data: {
           streamText: draft.streamText,
+          model: draft.model,
           width: a.width,
           height: a.height,
           targetPos,

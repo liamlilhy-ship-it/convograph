@@ -673,6 +673,25 @@
   background: var(--cg-accent-soft);
 }
 
+/* Model-name chip on the editable draft inputs + the streaming answer header,
+   telling the user which model will produce / is producing the reply. Muted (vs
+   the accent "Generating…" pill) so it reads as secondary metadata. */
+.cg-node .cg-model {
+  display: inline-flex;
+  align-items: center;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--cg-fg-muted);
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--cg-border);
+}
+
 /* ===== Floating draft node (edit / follow-up / regenerate) ===== */
 /* A draft reads as not-yet-real: dashed accent border, no hover lift / jump. */
 .cg-node-draft {

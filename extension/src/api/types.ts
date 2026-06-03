@@ -56,6 +56,10 @@ export type ApiMessage = {
 export type ApiConversation = {
   uuid: string;
   name?: string;
+  /** The conversation's current model (e.g. "claude-opus-4-8"). claude.ai stores
+   *  the model per CONVERSATION, not per message — there is no per-answer model in
+   *  the tree response — and a new completion with no `model` falls back to this. */
+  model?: string | null;
   current_leaf_message_uuid: string | null;
   chat_messages: ApiMessage[];
 };

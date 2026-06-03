@@ -28,6 +28,9 @@ type Draft = {
   title: string;
   editable: boolean;
   status: 'editing' | 'generating';
+  /** The conversation's current model id (e.g. "claude-opus-4-8") — what this
+   *  completion will use. Surfaced on the input + streaming answer cards. */
+  model?: string | null;
   /** Answer text accumulated from the live stream while generating. */
   streamText?: string;
   /** Reconciliation: the UUIDs of the messages this completion creates, captured
@@ -95,6 +98,10 @@ export function App() {
   // Shared preview font size — adjusting it in any window applies to all open
   // windows and any opened afterward.
   const [previewFontPx, setPreviewFontPx] = useState(DEFAULT_FS);
+  // The conversation's current model (e.g. "claude-opus-4-8"), captured on load.
+  // claude.ai has no per-message model, so this single value is what new
+  // completions use — shown on the draft input + streaming answer cards.
+  const [convModel, setConvModel] = useState<string | null>(null);
   // The single pending quick-action draft (one at a time). A non-null draft locks
   // all node action buttons so a second completion can't fire concurrently.
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -220,6 +227,7 @@ export function App() {
       const conv = await getConversationTree(orgIdRef.current, convId);
       if (req !== reqRef.current) return;
       const tree = buildDisplayTree(buildTree(conv));
+      setConvModel(conv.model ?? null);
       setStatus({ kind: 'ready', tree, convId });
       // If an open draft's real message has now landed in the tree, drop the
       // placeholder so the two never show side by side (the "duplicate on
@@ -397,9 +405,10 @@ export function App() {
         title: node.fullText,
         editable: true,
         status: 'editing',
+        model: convModel,
       },
     );
-  }, []);
+  }, [convModel]);
   const startFollowup = useCallback((node: DisplayNode) => {
     if (!node.assistantId) return;
     const parentMessageUuid = node.assistantId;
@@ -412,9 +421,10 @@ export function App() {
         title: '',
         editable: true,
         status: 'editing',
+        model: convModel,
       },
     );
-  }, []);
+  }, [convModel]);
 
   // Regenerate has no text input: spawn a read-only generating copy and fire now.
   const regenerate = useCallback(
@@ -428,11 +438,12 @@ export function App() {
         title: node.fullText,
         editable: false,
         status: 'generating',
+        model: convModel,
       };
       setDraft(d);
       void runCompletion(d, '');
     },
-    [draft, runCompletion],
+    [draft, runCompletion, convModel],
   );
 
   // Submit an editable draft: flip it to generating (showing the typed text) and run.
