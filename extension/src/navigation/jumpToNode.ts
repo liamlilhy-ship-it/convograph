@@ -8,7 +8,7 @@ import type { DisplayNode } from '../tree/displayTree';
  *   1. PUT the node's leaf message uuid to .../current_leaf_message_uuid.
  *   2. Ask the MAIN-world bridge to invalidate the React Query cache so the
  *      chat re-renders to the new branch (a bare PUT doesn't refresh the UI).
- *   3. Locate the node's question bubble and center it.
+ *   3. Locate the node's question bubble and scroll it to the top.
  *
  * The target leaf is `node.leafId` — a concrete descendant message with no
  * children. The node's own message id cannot be used: the API rejects a leaf
@@ -105,29 +105,34 @@ function findBubble(key: string): HTMLElement | null {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Gap left above the question bubble once it lands at the top of the scroller.
+ *  Generous enough to clear claude.ai's sticky header so the bubble never lands
+ *  flush against (or tucked under) the top edge. */
+const TOP_MARGIN = 56;
+
 /**
- * Centers `el` within the scroll container by adjusting scrollTop directly.
- * `scrollIntoView({behavior:'smooth'})` is unreliable here — claude.ai's
- * autoscroll container interrupts it, leaving the target hundreds of px off
- * (observed live). Manual scrollTop math lands exactly, and a second pass
- * absorbs any reflow nudge.
+ * Scrolls `el` to the TOP of the scroll container by adjusting scrollTop directly
+ * (leaving a small margin above it). `scrollIntoView({behavior:'smooth'})` is
+ * unreliable here — claude.ai's autoscroll container interrupts it, leaving the
+ * target hundreds of px off (observed live). Manual scrollTop math lands exactly,
+ * and a second pass absorbs any reflow nudge.
  */
-async function center(el: HTMLElement): Promise<void> {
+async function alignToTop(el: HTMLElement): Promise<void> {
   const sc = findScroller();
   if (!sc) {
-    el.scrollIntoView({ block: 'center' });
+    el.scrollIntoView({ block: 'start' });
     return;
   }
   for (let i = 0; i < 2; i++) {
     const r = el.getBoundingClientRect();
     const cr = sc.getBoundingClientRect();
-    sc.scrollTop += r.top + r.height / 2 - (cr.top + cr.height / 2);
+    sc.scrollTop += r.top - cr.top - TOP_MARGIN;
     await sleep(120);
   }
 }
 
 /**
- * Centers the node's question bubble. Two obstacles, both observed live:
+ * Scrolls the node's question bubble to the top. Two obstacles, both observed live:
  *   (a) the branch re-render may not have landed yet — poll briefly in place;
  *   (b) long conversations virtualize, so the bubble may not be mounted —
  *       actively scroll the container in steps until it mounts.
@@ -136,7 +141,7 @@ async function center(el: HTMLElement): Promise<void> {
  */
 async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean> {
   // `questionText` is the turn's human message for BOTH the question node and
-  // its answer node — so clicking an answer still centers the question bubble.
+  // its answer node — so clicking an answer still scrolls to the question bubble.
   const key = matchKey(stripMarkdown(node.questionText));
   if (!key) return false;
   const deadline = Date.now() + budgetMs;
@@ -145,7 +150,7 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
   for (let i = 0; i < 8 && Date.now() < deadline; i++) {
     const el = findBubble(key);
     if (el) {
-      await center(el);
+      await alignToTop(el);
       return true;
     }
     await sleep(150);
@@ -160,7 +165,7 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
       await sleep(120);
       const el = findBubble(key);
       if (el) {
-        await center(el);
+        await alignToTop(el);
         return true;
       }
     }
@@ -168,7 +173,7 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
 
   const el = findBubble(key);
   if (el) {
-    await center(el);
+    await alignToTop(el);
     return true;
   }
   return false;
@@ -177,7 +182,7 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
 export type JumpResult = { ok: boolean; refreshed: boolean; centered?: boolean; error?: string };
 
 /**
- * Switches the active branch and centers the node. Throws nothing — returns a
+ * Switches the active branch and scrolls the node to the top. Throws nothing — returns a
  * result the caller can surface as a toast.
  */
 export async function jumpToNode(
@@ -185,7 +190,7 @@ export async function jumpToNode(
   convId: string,
   node: DisplayNode,
 ): Promise<JumpResult> {
-  // Already the active branch? Just center it.
+  // Already the active branch? Just scroll to it.
   if (node.isOnActivePath) {
     const centered = await scrollToNode(node);
     return { ok: true, refreshed: false, centered };
