@@ -22,7 +22,7 @@ const REFRESH_REQUEST = 'cg-refresh-conversation';
 const REFRESH_DONE = 'cg-refresh-conversation-done';
 
 /** Asks the MAIN-world bridge to re-render; resolves false if it can't. */
-function requestRefresh(timeoutMs = 2500): Promise<boolean> {
+export function requestRefresh(timeoutMs = 2500): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false;
     const onDone = (e: Event) => {

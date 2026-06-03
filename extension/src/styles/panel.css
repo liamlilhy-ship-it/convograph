@@ -646,11 +646,165 @@
   background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
+/* Locked quick-action buttons: just dimmed. They stay hoverable and keep the
+   normal icon hover (accent wash) so hovering shows the explanatory title tooltip
+   exactly like any other icon — no "banned"/not-allowed cursor. Uses
+   aria-disabled (not `disabled`) so the tooltip and hover still fire; the click
+   is guarded in JS. */
+.cg-node .cg-pv-btn[aria-disabled="true"],
+.cg-node .cg-pv-btn:disabled {
+  opacity: 0.45;
+}
 /* Active state: the card is currently expanded in place. */
 .cg-node .cg-pv-toggle[data-active="true"] {
   background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
+
+/* "Generating…" pill shown in the header while a completion request is in flight. */
+.cg-node .cg-busy {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cg-accent);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--cg-accent-soft);
+}
+
+/* ===== Floating draft node (edit / follow-up / regenerate) ===== */
+/* A draft reads as not-yet-real: dashed accent border, no hover lift / jump. */
+.cg-node-draft {
+  border: 1.5px dashed var(--cg-accent);
+  cursor: default;
+}
+.cg-node-draft:hover { transform: none; box-shadow: var(--cg-shadow); }
+/* Generating body: the asked question (muted, for context) above the answer as
+   it streams in, with a Cancel row pinned at the bottom. */
+.cg-draft-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 11px;
+}
+.cg-draft-q {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--cg-fg-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+}
+/* The read-only question on the draft QUESTION node (while its answer streams in
+   a separate child node): show it in full + scroll, as the node's main content. */
+.cg-draft-q-full {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--cg-fg);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.cg-draft-answer {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.45;
+  padding-top: 7px;
+  border-top: 1px solid var(--cg-border);
+  user-select: text;
+}
+/* Blinking caret at the tail of the streaming answer. */
+.cg-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--cg-accent);
+  animation: cg-caret-blink 1s steps(2, start) infinite;
+}
+@keyframes cg-caret-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
+/* ===== Inline question editor (edit question / ask follow-up) ===== */
+.cg-node .cg-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 11px;
+}
+.cg-node .cg-editor-input {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--cg-border-strong);
+  border-radius: 8px;
+  background: var(--cg-bg);
+  color: var(--cg-fg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 8px 9px;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+.cg-node .cg-editor-input:focus {
+  outline: none;
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 2px var(--cg-accent-soft);
+}
+.cg-node .cg-editor-input:disabled { opacity: 0.6; }
+.cg-node .cg-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cg-node .cg-editor-hint {
+  margin-right: auto;
+  font-size: 10px;
+  color: var(--cg-fg-muted);
+}
+.cg-node .cg-editor-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--cg-border-strong);
+  background: var(--cg-bg-elev);
+  color: var(--cg-fg);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+.cg-node .cg-editor-btn:hover:not(:disabled) { border-color: var(--cg-accent); }
+.cg-node .cg-editor-send {
+  border-color: var(--cg-accent);
+  background: var(--cg-accent);
+  color: #fff;
+}
+.cg-node .cg-editor-send:hover:not(:disabled) { filter: brightness(1.05); }
+.cg-node .cg-editor-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* In-place preview: the card body becomes a fixed, scrollable reader that reuses
    the full-preview content rules (.cg-pv-content / .cg-pv-md), mirroring the

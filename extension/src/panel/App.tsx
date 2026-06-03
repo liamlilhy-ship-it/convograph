@@ -6,8 +6,49 @@ import { GraphCanvas } from './GraphCanvas';
 import { PreviewLayer, DEFAULT_FS, type OpenPreview, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
-import { jumpToNode } from '../navigation/jumpToNode';
+import { jumpToNode, requestRefresh } from '../navigation/jumpToNode';
+import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from '../api/chatClient';
+import type { DraftKind } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
+
+/**
+ * A pending quick-action draft. Drives the floating draft node on the canvas and
+ * carries everything needed to fire the completion when submitted.
+ *   - edit       → editable question node, parent = the question's parent (sibling branch)
+ *   - followup   → editable empty question node, parent = the answer message (child branch)
+ *   - regenerate → read-only copy of the question, retry on the human message
+ */
+type Draft = {
+  kind: DraftKind;
+  /** Display-node id the draft attaches to in the graph (for layout/edge). */
+  parentDisplayId: string | null;
+  /** completion `parent_message_uuid` (edit/followup) or retry target (regenerate). */
+  parentMessageUuid: string;
+  isRetry: boolean;
+  title: string;
+  editable: boolean;
+  status: 'editing' | 'generating';
+  /** Answer text accumulated from the live stream while generating. */
+  streamText?: string;
+  /** Reconciliation: the UUIDs of the messages this completion creates, captured
+   *  from the stream's `message_start` (the new assistant, and for edit/follow-up
+   *  the new human). Once any of them appears in a (re)loaded tree, the draft has
+   *  been realized and is dropped — so the placeholder never coexists with the
+   *  real node, on any refresh. Identity-based, so no parent/text matching. */
+  createdUuids?: string[];
+};
+
+/** Whether the real message(s) a draft created now exist in `tree` — matched by
+ *  the UUIDs captured from `message_start`. */
+function draftRealized(tree: DisplayTree, d: Draft): boolean {
+  if (!d.createdUuids?.length) return false;
+  const present = new Set<string>();
+  for (const n of tree.orderedNodes) {
+    present.add(n.humanId);
+    if (n.assistantId) present.add(n.assistantId);
+  }
+  return d.createdUuids.some((u) => present.has(u));
+}
 
 type Status =
   | { kind: 'idle' }
@@ -54,6 +95,13 @@ export function App() {
   // Shared preview font size — adjusting it in any window applies to all open
   // windows and any opened afterward.
   const [previewFontPx, setPreviewFontPx] = useState(DEFAULT_FS);
+  // The single pending quick-action draft (one at a time). A non-null draft locks
+  // all node action buttons so a second completion can't fire concurrently.
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // Mirror of `draft` for the DOM observer to read synchronously without
+  // re-subscribing — it pauses auto-refresh while a draft is open (see below).
+  const draftRef = useRef<Draft | null>(null);
   const orgIdRef = useRef<string | null>(null);
   const reqRef = useRef(0);
   const cascadeRef = useRef(0);
@@ -135,8 +183,17 @@ export function App() {
     if (!open) {
       setOpenPreviews([]);
       setPreviewIds(new Set());
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setDraft(null);
     }
   }, [open]);
+
+  // Keep the observer's view of the draft current (it reads this ref to pause
+  // auto-refresh while a draft is open).
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
 
   // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
   // scroll, layout shifts, and on panel open/close (because the composer moves
@@ -164,6 +221,11 @@ export function App() {
       if (req !== reqRef.current) return;
       const tree = buildDisplayTree(buildTree(conv));
       setStatus({ kind: 'ready', tree, convId });
+      // If an open draft's real message has now landed in the tree, drop the
+      // placeholder so the two never show side by side (the "duplicate on
+      // refresh"). Batched with setStatus → single render, no overlap frame.
+      const d = draftRef.current;
+      if (d && draftRealized(tree, d)) setDraft(null);
     } catch (e) {
       if (req !== reqRef.current) return;
       const msg = e instanceof ClaudeApiError
@@ -191,8 +253,15 @@ export function App() {
       }
     });
     // Same-chat updates (new message, edit) still refresh the graph — cheap and
-    // keeps the tree in sync while you're working in one conversation.
-    const unwatchConv = watchConversation(() => void load(), 800);
+    // keeps the tree in sync while you're working in one conversation. But PAUSE
+    // while a draft is open: a completion lands the new message in the native chat
+    // mid-stream, which would otherwise refetch and surface the real node next to
+    // our still-showing draft placeholder (a visible duplicate). We refetch once
+    // ourselves when the draft completes.
+    const unwatchConv = watchConversation(() => {
+      if (draftRef.current) return;
+      void load();
+    }, 800);
     return () => {
       unwatchUrl();
       unwatchConv();
@@ -243,6 +312,135 @@ export function App() {
     },
     [load],
   );
+
+  // ---- Quick actions via a floating draft node ----
+  // Runs the completion for a draft that has flipped to `generating`. Keeps the
+  // placeholder visible, fires the request (abortable), then re-renders the native
+  // chat and refetches our graph. claude.ai sets current_leaf server-side, so the
+  // new branch becomes the active path automatically. Cleared AFTER load() so the
+  // real branch is present before the placeholder disappears.
+  const runCompletion = useCallback(
+    async (d: Draft, prompt: string) => {
+      const convId = parseConversationIdFromUrl();
+      const orgId = orgIdRef.current;
+      if (!convId || !orgId) {
+        setToast('No active conversation');
+        setDraft(null);
+        return;
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+      // Stream the answer into the draft node. Coalesce deltas to one paint per
+      // frame so a fast stream doesn't thrash React state.
+      let acc = '';
+      let scheduled = false;
+      const onDelta = (delta: string) => {
+        acc += delta;
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => {
+          scheduled = false;
+          setDraft((cur) => (cur && cur.status === 'generating' ? { ...cur, streamText: acc } : cur));
+        });
+      };
+      // Record the created message UUIDs so a subsequent load drops the draft once
+      // the real node lands (no placeholder/real duplicate). The new assistant is
+      // always new; for edit/follow-up the parent is the NEW human (also match it),
+      // but for regenerate the parent is the EXISTING human, so skip it there.
+      const onStart = ({ assistantUuid, parentUuid }: { assistantUuid?: string; parentUuid?: string }) => {
+        const ids = [assistantUuid];
+        if (d.kind !== 'regenerate') ids.push(parentUuid);
+        const created = ids.filter((u): u is string => !!u);
+        if (created.length) {
+          setDraft((cur) => (cur && cur.status === 'generating' ? { ...cur, createdUuids: created } : cur));
+        }
+      };
+      try {
+        if (d.isRetry) {
+          await retryCompletion({ orgId, convId, parentMessageUuid: d.parentMessageUuid, signal: controller.signal, onDelta, onStart });
+        } else {
+          await createCompletion({ orgId, convId, parentMessageUuid: d.parentMessageUuid, prompt, signal: controller.signal, onDelta, onStart });
+        }
+        await requestRefresh();
+        await load();
+      } catch (e) {
+        const aborted =
+          controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError');
+        if (!aborted) setToast(e instanceof Error ? e.message : 'Generation failed');
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+        setDraft(null);
+      }
+    },
+    [load],
+  );
+
+  // Open an editable draft (no-op if one is already open — the buttons are locked,
+  // but guard anyway).
+  const startEdit = useCallback((node: DisplayNode) => {
+    setDraft((cur) =>
+      cur ?? {
+        kind: 'edit',
+        parentDisplayId: node.parentId,
+        parentMessageUuid: node.questionParentId ?? ROOT_PARENT_UUID,
+        isRetry: false,
+        title: node.fullText,
+        editable: true,
+        status: 'editing',
+      },
+    );
+  }, []);
+  const startFollowup = useCallback((node: DisplayNode) => {
+    if (!node.assistantId) return;
+    const parentMessageUuid = node.assistantId;
+    setDraft((cur) =>
+      cur ?? {
+        kind: 'followup',
+        parentDisplayId: node.id,
+        parentMessageUuid,
+        isRetry: false,
+        title: '',
+        editable: true,
+        status: 'editing',
+      },
+    );
+  }, []);
+
+  // Regenerate has no text input: spawn a read-only generating copy and fire now.
+  const regenerate = useCallback(
+    (node: DisplayNode) => {
+      if (draft) return;
+      const d: Draft = {
+        kind: 'regenerate',
+        parentDisplayId: node.parentId,
+        parentMessageUuid: node.humanId,
+        isRetry: true,
+        title: node.fullText,
+        editable: false,
+        status: 'generating',
+      };
+      setDraft(d);
+      void runCompletion(d, '');
+    },
+    [draft, runCompletion],
+  );
+
+  // Submit an editable draft: flip it to generating (showing the typed text) and run.
+  const submitDraft = useCallback(
+    (text: string) => {
+      if (!draft || !draft.editable) return;
+      const next: Draft = { ...draft, status: 'generating', title: text };
+      setDraft(next);
+      void runCompletion(next, text);
+    },
+    [draft, runCompletion],
+  );
+
+  const cancelDraft = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setDraft(null);
+  }, []);
 
   // Resize handle drag
   const onResizeStart = useCallback((e: React.MouseEvent) => {
@@ -336,6 +534,20 @@ export function App() {
               previewIds={previewIds}
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
+              draft={draft}
+              locked={draft != null}
+              lockReason={
+                draft
+                  ? draft.status === 'generating'
+                    ? 'Generating… wait for it to finish before starting another action'
+                    : 'Finish or cancel the open draft first'
+                  : undefined
+              }
+              onStartEdit={startEdit}
+              onStartFollowup={startFollowup}
+              onRegenerate={regenerate}
+              onCancelDraft={cancelDraft}
+              onSubmitDraft={submitDraft}
             />
           ) : (
             <div className="cg-empty">

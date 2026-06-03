@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import type { ContentKind, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
@@ -13,6 +13,9 @@ import {
   RegenIcon,
   ExpandIcon,
   WindowIcon,
+  EditIcon,
+  FollowUpIcon,
+  SendIcon,
 } from './icons';
 import { type PreviewItem } from './HoverPreview';
 import { FullPreview } from './FullPreview';
@@ -27,13 +30,35 @@ type HoverApi = {
   onPreviewEnd: () => void;
 };
 
+/** The kind of draft a quick-action spawns. `edit`/`followup` are editable;
+ *  `regenerate` is a read-only copy of the question that fires immediately. */
+export type DraftKind = 'edit' | 'followup' | 'regenerate';
+/** View model for the floating draft node (separate from any real DisplayNode). */
+export type DraftView = {
+  kind: DraftKind;
+  /** Prefilled text (edit) / asked text once submitted, or read-only copy (regenerate). */
+  title: string;
+  editable: boolean;
+  status: 'editing' | 'generating';
+  /** Live-streamed answer text while generating (progressive enhancement). */
+  streamText?: string;
+};
+
 export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
   isPreview?: boolean;
+  /** A draft/generation is open somewhere — disable all quick-action buttons so a
+   *  second completion can't fire concurrently (claude.ai rejects those). */
+  locked?: boolean;
+  /** Tooltip shown on the disabled action buttons explaining the lock. */
+  lockReason?: string;
   onClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
   onTogglePreview: (node: DisplayNode) => void;
+  onStartEdit: (node: DisplayNode) => void;
+  onStartFollowup: (node: DisplayNode) => void;
+  onRegenerate: (node: DisplayNode) => void;
   style?: CSSProperties;
 };
 
@@ -48,11 +73,16 @@ export function NodeCard({
   node,
   jumping,
   isPreview,
+  locked,
+  lockReason,
   onPreview,
   onPreviewEnd,
   onClick,
   onOpenPreview,
   onTogglePreview,
+  onStartEdit,
+  onStartFollowup,
+  onRegenerate,
   style,
 }: NodeCardProps) {
   const isHuman = node.role === 'human';
@@ -71,6 +101,8 @@ export function NodeCard({
   const cardStyle: CSSProperties | undefined = isPreview
     ? { ...style, ['--cg-pv-fs' as never]: `${INLINE_PREVIEW_FS}px` }
     : style;
+  // Regenerate retries an existing answer — only meaningful once the turn has one.
+  const canRegenerate = node.assistantId != null;
 
   return (
     <div
@@ -84,8 +116,8 @@ export function NodeCard({
     >
       <div
         className="cg-head"
-        // In preview mode the card body is for reading (no card-level jump), so the
-        // header stays the jump affordance — click the role row to jump to this message.
+        // In preview mode the body is for reading (no card-level jump), so the
+        // header row becomes the click-to-jump target instead.
         onClick={isPreview ? () => onClick(node) : undefined}
         title={isPreview ? 'Jump to this message' : undefined}
       >
@@ -105,6 +137,57 @@ export function NodeCard({
           </span>
         )}
         <div className="cg-head-actions">
+          {isHuman ? (
+            <>
+              <button
+                type="button"
+                className="cg-pv-btn"
+                // aria-disabled (not `disabled`) keeps the element hoverable so the
+                // tooltip explaining the lock still shows; the click is guarded below.
+                aria-disabled={locked || undefined}
+                title={locked ? lockReason : 'Edit question'}
+                aria-label="Edit question"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (locked) return;
+                  onStartEdit(node);
+                }}
+              >
+                <EditIcon size={12} />
+              </button>
+              {canRegenerate && (
+                <button
+                  type="button"
+                  className="cg-pv-btn"
+                  aria-disabled={locked || undefined}
+                  title={locked ? lockReason : 'Regenerate answer'}
+                  aria-label="Regenerate answer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (locked) return;
+                    onRegenerate(node);
+                  }}
+                >
+                  <RegenIcon size={12} />
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="cg-pv-btn"
+              aria-disabled={locked || undefined}
+              title={locked ? lockReason : 'Ask follow-up'}
+              aria-label="Ask follow-up"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (locked) return;
+                onStartFollowup(node);
+              }}
+            >
+              <FollowUpIcon size={12} />
+            </button>
+          )}
           <button
             type="button"
             className="cg-pv-btn"
@@ -155,6 +238,191 @@ export function NodeCard({
           />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The floating draft QUESTION node — a separate human card spawned on the canvas
+ * when the user starts an Edit / Follow-up / Regenerate, wired into the graph with
+ * the correct parent so the original node stays in view. While editing it shows a
+ * composer; once generating it shows the question read-only (the streamed answer
+ * lives in a separate child answer node, `DraftAnswerCard`).
+ */
+export function DraftQuestionCard({
+  draft,
+  style,
+  onCancel,
+  onSubmit,
+}: {
+  draft: DraftView;
+  style?: CSSProperties;
+  onCancel: () => void;
+  onSubmit: (text: string) => void;
+}) {
+  const generating = draft.status === 'generating';
+  const showEditor = draft.editable && !generating;
+  return (
+    <div
+      className="cg-node cg-node-draft"
+      data-role="human"
+      data-active="true"
+      style={style}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="cg-head">
+        <span className="cg-role">
+          <UserIcon size={12} />
+          You
+        </span>
+        {/* No "regen" tag here on purpose: the draft mirrors the original question
+            while generating; the tag appears on the real branch after it lands. */}
+      </div>
+      {showEditor ? (
+        <InlineEditor
+          mode={draft.kind === 'followup' ? 'followup' : 'edit'}
+          initial={draft.title}
+          onCancel={onCancel}
+          onSubmit={onSubmit}
+        />
+      ) : (
+        <div className="cg-draft-body nowheel nopan">
+          <div className="cg-draft-q cg-draft-q-full">
+            {draft.title || <em style={{ opacity: 0.55 }}>New question</em>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The floating draft ANSWER node — an assistant card, child of the draft question,
+ * that renders Claude's reply as it streams in (with a "Generating…" pill and a
+ * Cancel/abort button). Replaced by the real answer node once the stream finishes.
+ */
+export function DraftAnswerCard({
+  streamText,
+  style,
+  onCancel,
+}: {
+  streamText?: string;
+  style?: CSSProperties;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="cg-node cg-node-draft"
+      data-role="assistant"
+      data-active="true"
+      style={style}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="cg-head">
+        <span className="cg-role">
+          <ClaudeIcon size={12} />
+          Claude
+        </span>
+        <span className="cg-busy">Generating…</span>
+      </div>
+      <div className="cg-draft-body nowheel nopan">
+        <StreamingAnswer text={streamText} />
+        <div className="cg-editor-actions">
+          <span className="cg-editor-hint" />
+          <button type="button" className="cg-editor-btn" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The live-streaming answer text; auto-scrolls to the newest token. */
+function StreamingAnswer({ text }: { text?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <div className="cg-draft-answer" ref={ref}>
+      {text ? (
+        <>
+          {text}
+          <span className="cg-caret" aria-hidden="true" />
+        </>
+      ) : (
+        <span className="cg-muted">Claude is responding…</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline question composer used inside a draft node. Fresh-mounts each time a
+ * draft opens, so `useState(initial)` seeds it correctly — `edit` prefills the
+ * question text, `followup` starts empty. ⌘/Ctrl+Enter submits, Esc cancels.
+ * Clicks/keys are stopped from bubbling so they never pan the canvas.
+ */
+function InlineEditor({
+  mode,
+  initial,
+  onCancel,
+  onSubmit,
+}: {
+  mode: 'edit' | 'followup';
+  initial: string;
+  onCancel: () => void;
+  onSubmit: (text: string) => void;
+}) {
+  const [text, setText] = useState(initial);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    // Place the cursor at the end of any prefilled text.
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+  const canSend = text.trim().length > 0;
+  const submit = () => {
+    if (canSend) onSubmit(text.trim());
+  };
+  return (
+    <div className="cg-editor nowheel nopan" onClick={(e) => e.stopPropagation()}>
+      <textarea
+        ref={ref}
+        className="cg-editor-input"
+        value={text}
+        placeholder={mode === 'followup' ? 'Ask a follow-up…' : 'Edit the question…'}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+      <div className="cg-editor-actions">
+        <span className="cg-editor-hint">⌘↵ to send</span>
+        <button type="button" className="cg-editor-btn" onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="cg-editor-btn cg-editor-send"
+          disabled={!canSend}
+          onClick={submit}
+        >
+          <SendIcon size={12} />
+          {mode === 'followup' ? 'Send' : 'Save'}
+        </button>
+      </div>
     </div>
   );
 }

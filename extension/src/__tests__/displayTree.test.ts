@@ -166,3 +166,32 @@ describe('buildDisplayTree — nested edit + regenerate', () => {
     expect(dogs4.isOnActivePath).toBe(true);
   });
 });
+
+describe('buildDisplayTree — message uuids for completion targets', () => {
+  it('exposes humanId / assistantId / questionParentId on both Q and A nodes', () => {
+    const dt = build(nested);
+    // h1 → a1 → { h2a → a2a, h2b → { a3, a4 } }
+    const rootQ = dt.byId.get(qid('h1', 'a1'))!;
+    const rootA = dt.byId.get(aid('h1', 'a1'))!;
+    const cats = dt.byId.get(qid('h2a', 'a2a'))!;
+    const dogs3 = dt.byId.get(qid('h2b', 'a3'))!;
+
+    // Carried identically on the question and its answer node.
+    expect(rootQ.humanId).toBe('h1');
+    expect(rootQ.assistantId).toBe('a1');
+    expect(rootQ.questionParentId).toBeNull(); // first turn → edit branches off root
+    expect(rootA.humanId).toBe('h1');
+    expect(rootA.assistantId).toBe('a1'); // follow-up off the root answer parents here
+
+    // Edit target: the question's own parent (the prior answer a1).
+    expect(cats.humanId).toBe('h2a');
+    expect(cats.assistantId).toBe('a2a');
+    expect(cats.questionParentId).toBe('a1');
+
+    // Regenerate target is the shared human message; each regenerate branch keeps
+    // its own answer as assistantId.
+    expect(dogs3.humanId).toBe('h2b');
+    expect(dogs3.assistantId).toBe('a3');
+    expect(dogs3.questionParentId).toBe('a1');
+  });
+});

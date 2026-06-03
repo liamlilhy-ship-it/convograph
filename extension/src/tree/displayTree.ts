@@ -34,6 +34,16 @@ export type DisplayNode = {
   /** A concrete leaf MESSAGE uuid for this branch — what current_leaf must be
    *  set to. Shared by the turn's question and answer nodes. */
   leafId: string;
+  /** Underlying claude.ai message uuids for this turn, used as completion
+   *  `parent_message_uuid` targets. Carried on BOTH the question and answer node:
+   *   - `humanId`           — the human (question) message; retry target for Regenerate.
+   *   - `assistantId`       — the assistant (answer) message; parent for Ask-follow-up
+   *                           (null on a pending turn with no answer yet).
+   *   - `questionParentId`  — the message this turn branches from (the prior answer,
+   *                           or null at a root); parent for Edit-question. */
+  humanId: string;
+  assistantId: string | null;
+  questionParentId: string | null;
   isOnActivePath: boolean;
   /** Branch position of this TURN (carried on both the question and answer). */
   siblingIndex: number;
@@ -61,6 +71,8 @@ type TurnPair = {
   id: string; // `${humanId}::${assistantId | 'pending'}`
   humanId: string;
   assistantId: string | null;
+  /** Message-level parent of the human Q (prior answer, or null at a root). */
+  questionParentId: string | null;
   leafId: string;
   parentId: string | null;
   childIds: string[];
@@ -161,6 +173,7 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
         id,
         humanId: node.id,
         assistantId: null,
+        questionParentId: node.parentId,
         leafId: descendToLeaf(node.id, built),
         parentId: null,
         childIds: [],
@@ -186,6 +199,7 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
           id,
           humanId: node.id,
           assistantId: a.id,
+          questionParentId: node.parentId,
           leafId: descendToLeaf(a.id, built),
           parentId: null,
           childIds: [],
@@ -316,6 +330,9 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
       body: p.humanBody,
       questionText: p.humanFullText,
       leafId: p.leafId,
+      humanId: p.humanId,
+      assistantId: p.assistantId,
+      questionParentId: p.questionParentId,
       isOnActivePath: p.isOnActivePath,
       siblingIndex: p.siblingIndex,
       siblingCount: p.siblingCount,
@@ -335,6 +352,9 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
         body: p.assistantBody,
         questionText: p.humanFullText,
         leafId: p.leafId,
+        humanId: p.humanId,
+        assistantId: p.assistantId,
+        questionParentId: p.questionParentId,
         isOnActivePath: p.isOnActivePath,
         siblingIndex: p.siblingIndex,
         siblingCount: p.siblingCount,

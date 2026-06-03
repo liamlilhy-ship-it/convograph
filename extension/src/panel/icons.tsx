@@ -154,3 +154,34 @@ export function WindowIcon(p: IconProps) {
     </svg>
   );
 }
+
+/** Pencil glyph — edits a question node's text in place. */
+export function EditIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M2.5 11.5v-2l7-7 2 2-7 7z" />
+      <line x1="8.5" y1="3.5" x2="10.5" y2="5.5" />
+    </svg>
+  );
+}
+
+/** Speech-bubble-with-plus glyph — asks a follow-up off an answer node. */
+export function FollowUpIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M2 3.5h10v6H7l-2.5 2.5V9.5H2z" />
+      <line x1="7" y1="5" x2="7" y2="8" />
+      <line x1="5.5" y1="6.5" x2="8.5" y2="6.5" />
+    </svg>
+  );
+}
+
+/** Paper-plane glyph — submits an inline editor (edit / follow-up). */
+export function SendIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M12 2.5L2 6.5l4 1.5 1.5 4z" />
+      <line x1="12" y1="2.5" x2="6" y2="8" />
+    </svg>
+  );
+}
