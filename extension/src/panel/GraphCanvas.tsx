@@ -273,16 +273,17 @@ export function GraphCanvas({
         };
       });
     if (draftPresent) {
-      // Question draft hangs off its target parent; while generating, a child
-      // answer draft holds the streamed reply.
+      // Question draft hangs off its target parent. While generating, the child
+      // answer draft holds the streamed reply and defaults to the in-line preview
+      // reader size; the question goes read-only and matches that width.
       layoutInput.push({
         id: DRAFT_Q_ID,
         parentId: draftParent,
-        width: EDITOR_W,
+        width: draftGenerating ? PREVIEW_W : EDITOR_W,
         height: draftGenerating ? DRAFT_Q_GEN_H : EDITOR_H,
       });
       if (draftGenerating) {
-        layoutInput.push({ id: DRAFT_A_ID, parentId: DRAFT_Q_ID, width: EDITOR_W, height: EDITOR_H });
+        layoutInput.push({ id: DRAFT_A_ID, parentId: DRAFT_Q_ID, width: PREVIEW_W, height: PREVIEW_H });
       }
     }
     const { nodes: laidNodes, edges } = layoutTree(layoutInput, { direction });

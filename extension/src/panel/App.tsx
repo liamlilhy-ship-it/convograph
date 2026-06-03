@@ -225,7 +225,16 @@ export function App() {
       // placeholder so the two never show side by side (the "duplicate on
       // refresh"). Batched with setStatus → single render, no overlap frame.
       const d = draftRef.current;
-      if (d && draftRealized(tree, d)) setDraft(null);
+      if (d && draftRealized(tree, d)) {
+        // The draft answer was in the in-line preview reader; keep the real answer
+        // node expanded in that same state (now with the final text) instead of
+        // collapsing it to a snippet.
+        const answer = tree.orderedNodes.find(
+          (n) => n.role === 'assistant' && n.assistantId != null && !!d.createdUuids?.includes(n.assistantId),
+        );
+        if (answer) setPreviewIds((prev) => (prev.has(answer.id) ? prev : new Set(prev).add(answer.id)));
+        setDraft(null);
+      }
     } catch (e) {
       if (req !== reqRef.current) return;
       const msg = e instanceof ClaudeApiError
@@ -330,18 +339,18 @@ export function App() {
       }
       const controller = new AbortController();
       abortRef.current = controller;
-      // Stream the answer into the draft node. Coalesce deltas to one paint per
-      // frame so a fast stream doesn't thrash React state.
+      // Stream the answer into the draft node, coalescing deltas to ~12 paints/sec.
+      // The answer renders as markdown (re-parsed each flush), so a throttle well
+      // above frame rate keeps a fast stream from thrashing parse + React state.
       let acc = '';
-      let scheduled = false;
+      let streamTimer: number | null = null;
       const onDelta = (delta: string) => {
         acc += delta;
-        if (scheduled) return;
-        scheduled = true;
-        requestAnimationFrame(() => {
-          scheduled = false;
+        if (streamTimer != null) return;
+        streamTimer = window.setTimeout(() => {
+          streamTimer = null;
           setDraft((cur) => (cur && cur.status === 'generating' ? { ...cur, streamText: acc } : cur));
-        });
+        }, 80);
       };
       // Record the created message UUIDs so a subsequent load drops the draft once
       // the real node lands (no placeholder/real duplicate). The new assistant is
@@ -368,6 +377,7 @@ export function App() {
           controller.signal.aborted || (e instanceof DOMException && e.name === 'AbortError');
         if (!aborted) setToast(e instanceof Error ? e.message : 'Generation failed');
       } finally {
+        if (streamTimer != null) clearTimeout(streamTimer);
         if (abortRef.current === controller) abortRef.current = null;
         setDraft(null);
       }

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
+import { renderMarkdown } from './markdown';
 import type { ContentKind, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import {
@@ -297,9 +298,11 @@ export function DraftQuestionCard({
 }
 
 /**
- * The floating draft ANSWER node — an assistant card, child of the draft question,
- * that renders Claude's reply as it streams in (with a "Generating…" pill and a
- * Cancel/abort button). Replaced by the real answer node once the stream finishes.
+ * The floating draft ANSWER node — an assistant card, child of the draft question.
+ * Defaults to the in-line-preview reader (the big scrollable markdown view), so the
+ * streamed reply reads like an expanded node rather than a cramped snippet. Carries
+ * a "Generating…" pill + Cancel/abort, and is replaced by the real answer node when
+ * the stream finishes.
  */
 export function DraftAnswerCard({
   streamText,
@@ -310,12 +313,15 @@ export function DraftAnswerCard({
   style?: CSSProperties;
   onCancel: () => void;
 }) {
+  // Match the in-place preview's fixed reader font.
+  const cardStyle: CSSProperties = { ...style, ['--cg-pv-fs' as never]: `${INLINE_PREVIEW_FS}px` };
   return (
     <div
       className="cg-node cg-node-draft"
       data-role="assistant"
       data-active="true"
-      style={style}
+      data-preview="true"
+      style={cardStyle}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="cg-head">
@@ -324,36 +330,48 @@ export function DraftAnswerCard({
           Claude
         </span>
         <span className="cg-busy">Generating…</span>
-      </div>
-      <div className="cg-draft-body nowheel nopan">
-        <StreamingAnswer text={streamText} />
-        <div className="cg-editor-actions">
-          <span className="cg-editor-hint" />
-          <button type="button" className="cg-editor-btn" onClick={onCancel}>
+        <div className="cg-head-actions">
+          <button type="button" className="cg-editor-btn cg-draft-cancel" onClick={onCancel}>
             Cancel
           </button>
         </div>
       </div>
+      <StreamingReader text={streamText} />
     </div>
   );
 }
 
-/** The live-streaming answer text; auto-scrolls to the newest token. */
-function StreamingAnswer({ text }: { text?: string }) {
+/**
+ * Scrollable in-line-preview reader for the streaming answer. Renders the partial
+ * text as markdown (matching a node's expanded preview) and keeps the newest text
+ * in view — but ONLY while the user is already at the bottom. If they scroll up to
+ * read earlier content, their position is left alone as more text streams in.
+ */
+function StreamingReader({ text }: { text?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Whether to keep pinning to the bottom as content grows. Flipped off when the
+  // user scrolls away from the bottom, back on when they return to it.
+  const stick = useRef(true);
+  const html = useMemo(() => (text ? renderMarkdown(text) : ''), [text]);
   useEffect(() => {
     const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [text]);
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [html]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    stick.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
+  };
   return (
-    <div className="cg-draft-answer" ref={ref}>
+    <div className="cg-node-pv-body nowheel nopan" ref={ref} onScroll={onScroll}>
       {text ? (
-        <>
-          {text}
-          <span className="cg-caret" aria-hidden="true" />
-        </>
+        <div className="cg-pv-content">
+          <div className="cg-pv-md" dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
       ) : (
-        <span className="cg-muted">Claude is responding…</span>
+        <div className="cg-pv-content">
+          <span className="cg-muted">Claude is responding…</span>
+        </div>
       )}
     </div>
   );

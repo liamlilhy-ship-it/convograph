@@ -713,32 +713,11 @@
   font-size: 13px;
   line-height: 1.45;
 }
-.cg-draft-answer {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 13px;
-  line-height: 1.45;
-  padding-top: 7px;
-  border-top: 1px solid var(--cg-border);
-  user-select: text;
-}
-/* Blinking caret at the tail of the streaming answer. */
-.cg-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 1px;
-  vertical-align: text-bottom;
-  background: var(--cg-accent);
-  animation: cg-caret-blink 1s steps(2, start) infinite;
-}
-@keyframes cg-caret-blink {
-  0%, 50% { opacity: 1; }
-  50.01%, 100% { opacity: 0; }
+/* Compact Cancel in the streaming answer node's header (it uses the in-line
+   preview reader for its body, so the action lives in the header). */
+.cg-node .cg-draft-cancel {
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 /* ===== Inline question editor (edit question / ask follow-up) ===== */
