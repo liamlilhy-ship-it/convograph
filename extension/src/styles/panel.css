@@ -105,6 +105,7 @@
 }
 .cg-toolbar .cg-spacer { flex: 1; }
 .cg-toolbar button {
+  position: relative; /* anchor for the custom hover tooltip (::after) */
   font: inherit;
   font-size: 12px;
   height: 28px;
@@ -115,7 +116,24 @@
   color: var(--cg-fg);
   cursor: pointer;
 }
+/* The button row sits above the status row below it, so a button's tooltip
+   (which drops downward) paints over the status text instead of behind it. */
+.cg-toolbar-main {
+  position: relative;
+  z-index: 2;
+}
 .cg-toolbar button:hover { border-color: var(--cg-accent); }
+/* Icon-only toolbar button (e.g. full-screen toggle): center the SVG glyph. */
+.cg-toolbar button.cg-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+}
+.cg-toolbar button[aria-pressed="true"] {
+  border-color: var(--cg-accent);
+  color: var(--cg-accent);
+}
 .cg-toolbar .cg-status {
   font-size: 11px;
   color: var(--cg-fg-muted);
@@ -129,6 +147,24 @@
       0 0 / 24px 24px,
     var(--cg-bg);
 }
+
+/* ===== Full-screen mode ===== */
+/* The panel fills the whole viewport instead of the right-side column. No
+   left border / shadow / slide-in, and the width-resize handle is irrelevant. */
+.cg-panel[data-fullscreen="true"] {
+  left: 0;
+  right: 0;
+  width: auto;
+  border-left: none;
+  box-shadow: none;
+  animation: none;
+}
+.cg-panel[data-fullscreen="true"] .cg-resize { display: none; }
+/* Click-to-jump is disabled in full-screen, so nodes aren't jump targets: drop
+   the pointer cursor and the hover "lift" that implies clickability. The
+   per-node action buttons keep their own pointer cursor. */
+.cg-panel[data-fullscreen="true"] .cg-node { cursor: default; }
+.cg-panel[data-fullscreen="true"] .cg-node:hover { transform: none; }
 
 /* React Flow disables pointer events on nodes unless they're selectable/
    draggable (we turn both off). Re-enable so clicks/hovers reach our cards
@@ -183,6 +219,10 @@
   gap: 6px;
   flex: 0 0 auto;
   padding: 7px 12px 0;
+  /* Lift the header (and its action-button tooltips) above the card body so the
+     tooltip, which drops down into the body area, paints on top of the text. */
+  position: relative;
+  z-index: 2;
 }
 .cg-node .cg-role {
   display: inline-flex;
@@ -589,10 +629,13 @@
   stroke-width: 2;
 }
 .react-flow__controls button {
+  position: relative; /* anchor for the custom hover tooltip (::after) */
   background: var(--cg-bg-elev) !important;
   border-color: var(--cg-border) !important;
   color: var(--cg-fg) !important;
 }
+/* Let a control's tooltip extend past the control stack (it opens to the right). */
+.react-flow__controls { overflow: visible; }
 
 /* Minimap — surfaces on pan/zoom, then fades out (visibility toggled in JS). */
 .cg-minimap.react-flow__minimap {
@@ -628,6 +671,7 @@
 }
 .cg-node .cg-pv-btn,
 .cg-node .cg-pv-toggle {
+  position: relative; /* anchor for the custom hover tooltip (::after) */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -646,13 +690,77 @@
   background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
-/* Locked quick-action buttons: just dimmed. They stay hoverable and keep the
-   normal icon hover (accent wash) so hovering shows the explanatory title tooltip
-   exactly like any other icon — no "banned"/not-allowed cursor. Uses
-   aria-disabled (not `disabled`) so the tooltip and hover still fire; the click
-   is guarded in JS. */
-.cg-node .cg-pv-btn[aria-disabled="true"],
-.cg-node .cg-pv-btn:disabled {
+/* Icon buttons: make the SVG glyph non-interactive so the BUTTON is the hover /
+   tooltip target. Otherwise the SVG child captures the pointer and the browser
+   never resolves the button's native `title`, so hovering shows no text (the
+   "Ask follow-up"/"Regenerate answer" tooltips appeared to vanish). Clicks still
+   land — they fall through the icon to the button. */
+.cg-node .cg-pv-btn svg,
+.cg-node .cg-pv-toggle svg,
+.cg-toolbar button svg,
+.react-flow__controls button svg {
+  pointer-events: none;
+}
+/* Custom hover tooltip for the node action icons. The native `title` tooltip has
+   a fixed ~1s browser delay we can't shorten, so render our own: it drops just
+   below the button (inside the card — the card clips overflow, so an above/
+   outside tooltip would be cut off) and fades in after a short ~200ms delay. */
+.cg-node .cg-pv-btn[data-tip]:hover::after,
+.cg-node .cg-pv-toggle[data-tip]:hover::after,
+.cg-toolbar button[data-tip]:hover::after,
+.react-flow__controls button[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 20;
+  /* Wrap long text (e.g. the locked-state reason) so it can't overflow the card
+     and get clipped; short labels stay on one line. */
+  white-space: normal;
+  max-width: 240px;
+  width: max-content;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--cg-fg);
+  background: var(--cg-bg-elev);
+  border: 1px solid var(--cg-border-strong);
+  border-radius: 6px;
+  padding: 3px 7px;
+  box-shadow: var(--cg-shadow);
+  pointer-events: none;
+  opacity: 0;
+  animation: cg-tip-in 90ms ease 200ms forwards;
+}
+@keyframes cg-tip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* The lower-left controls are a bottom-left vertical stack, so their tooltip opens
+   to the RIGHT (vertically centered) instead of dropping below — where it'd cover
+   the next button or fall off the canvas edge. Must come AFTER the rule above so
+   it overrides the shared below-right position. Fade only (no slide), so the
+   centering transform isn't clobbered by the animation. */
+.react-flow__controls button[data-tip]:hover::after {
+  top: 50%;
+  bottom: auto;
+  left: calc(100% + 8px);
+  right: auto;
+  transform: translateY(-50%);
+  animation: cg-tip-fade 90ms ease 200ms forwards;
+}
+@keyframes cg-tip-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Locked quick-action buttons: dim the ICON only. Putting opacity on the button
+   would also fade its ::after tooltip (opacity applies to the whole subtree), so
+   the locked-state tooltip looked washed-out vs the always-enabled ones. Dimming
+   just the glyph keeps the tooltip crisp and identical to every other button.
+   Uses aria-disabled (not `disabled`) so hover + tooltip still fire; click is
+   guarded in JS. */
+.cg-node .cg-pv-btn[aria-disabled="true"] svg,
+.cg-node .cg-pv-btn:disabled svg {
   opacity: 0.45;
 }
 /* Active state: the card is currently expanded in place. */

@@ -185,3 +185,59 @@ export function SendIcon(p: IconProps) {
     </svg>
   );
 }
+
+/** Corner-brackets-out glyph — enters full-screen mode (graph fills the viewport). */
+export function FullscreenIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <polyline points="5.5 2.5 2.5 2.5 2.5 5.5" />
+      <polyline points="8.5 2.5 11.5 2.5 11.5 5.5" />
+      <polyline points="11.5 8.5 11.5 11.5 8.5 11.5" />
+      <polyline points="2.5 8.5 2.5 11.5 5.5 11.5" />
+    </svg>
+  );
+}
+
+/** Corner-brackets-in glyph — exits full-screen back to the side panel. */
+export function ExitFullscreenIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <polyline points="2.5 5.5 5.5 5.5 5.5 2.5" />
+      <polyline points="11.5 5.5 8.5 5.5 8.5 2.5" />
+      <polyline points="11.5 8.5 8.5 8.5 8.5 11.5" />
+      <polyline points="2.5 8.5 5.5 8.5 5.5 11.5" />
+    </svg>
+  );
+}
+
+/** Plus glyph — zoom in (lower-left canvas control). */
+export function PlusIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <line x1="7" y1="3" x2="7" y2="11" />
+      <line x1="3" y1="7" x2="11" y2="7" />
+    </svg>
+  );
+}
+
+/** Minus glyph — zoom out (lower-left canvas control). */
+export function MinusIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <line x1="3" y1="7" x2="11" y2="7" />
+    </svg>
+  );
+}
+
+/** Crosshair/target glyph — recenters the canvas on the active branch. */
+export function CenterIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <circle cx="7" cy="7" r="2.6" />
+      <line x1="7" y1="1.5" x2="7" y2="3.2" />
+      <line x1="7" y1="10.8" x2="7" y2="12.5" />
+      <line x1="1.5" y1="7" x2="3.2" y2="7" />
+      <line x1="10.8" y1="7" x2="12.5" y2="7" />
+    </svg>
+  );
+}

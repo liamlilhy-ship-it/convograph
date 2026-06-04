@@ -10,6 +10,7 @@ import { jumpToNode, requestRefresh } from '../navigation/jumpToNode';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from '../api/chatClient';
 import type { DraftKind } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
+import { FullscreenIcon, ExitFullscreenIcon } from './icons';
 
 /**
  * A pending quick-action draft. Drives the floating draft node on the canvas and
@@ -83,6 +84,10 @@ function usePagePushRight(open: boolean, width: number) {
 
 export function App() {
   const [open, setOpen] = useState(false);
+  // Full-screen: the panel fills the viewport instead of the right side. Same
+  // capabilities, EXCEPT click-to-jump is disabled (the native chat it would
+  // scroll is hidden behind the graph). Reset whenever the panel closes.
+  const [fullscreen, setFullscreen] = useState(false);
   const [panelW, setPanelW] = useState(DEFAULT_PANEL_W);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [direction, setDirection] = useState<LayoutDirection>('TB');
@@ -114,7 +119,9 @@ export function App() {
   const cascadeRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
 
-  usePagePushRight(open, panelW);
+  // Don't push the page in full-screen — the graph covers the whole viewport, so
+  // there's no side panel to make room for (and the native chat is hidden).
+  usePagePushRight(open && !fullscreen, panelW);
 
   // ---- Full-preview windows ----
   const openPreview = useCallback((node: DisplayNode) => {
@@ -166,7 +173,11 @@ export function App() {
       const cols = Math.ceil(Math.sqrt(n));
       const rows = Math.ceil(n / cols);
       const gap = 12;
-      const areaW = Math.max(320, window.innerWidth - panelW - 2 * gap);
+      // In full-screen the graph fills the viewport, so tile across the whole
+      // width; otherwise tile into the area left of the side panel.
+      const areaW = fullscreen
+        ? window.innerWidth - 2 * gap
+        : Math.max(320, window.innerWidth - panelW - 2 * gap);
       const areaH = window.innerHeight - 2 * gap;
       const cellW = (areaW - gap * (cols - 1)) / cols;
       const cellH = (areaH - gap * (rows - 1)) / rows;
@@ -182,10 +193,11 @@ export function App() {
         };
       });
     });
-  }, [panelW]);
+  }, [panelW, fullscreen]);
 
   // Previews belong to graph mode — clear them when the panel closes (which also
-  // fires on chat switch, since that closes the panel).
+  // fires on chat switch, since that closes the panel). Also drop full-screen so
+  // reopening always starts in the side-panel mode.
   useEffect(() => {
     if (!open) {
       setOpenPreviews([]);
@@ -193,6 +205,7 @@ export function App() {
       abortRef.current?.abort();
       abortRef.current = null;
       setDraft(null);
+      setFullscreen(false);
     }
   }, [open]);
 
@@ -294,7 +307,11 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) setOpen(false);
+      // Esc steps out one level: full-screen → side panel → closed.
+      if (e.key === 'Escape' && open) {
+        if (fullscreen) setFullscreen(false);
+        else setOpen(false);
+      }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault();
         setOpen((v) => !v);
@@ -302,10 +319,13 @@ export function App() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open]);
+  }, [open, fullscreen]);
 
   const handleNodeClick = useCallback(
     async (node: DisplayNode) => {
+      // No click-to-jump in full-screen: jumping scrolls the native chat, which
+      // is hidden behind the graph, so the click is inert.
+      if (fullscreen) return;
       const convId = parseConversationIdFromUrl();
       const orgId = orgIdRef.current;
       if (!convId || !orgId) return;
@@ -327,7 +347,7 @@ export function App() {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load],
+    [load, fullscreen],
   );
 
   // ---- Quick actions via a floating draft node ----
@@ -518,6 +538,7 @@ export function App() {
           className="cg-panel"
           role="complementary"
           aria-label="Conversation graph"
+          data-fullscreen={fullscreen ? 'true' : 'false'}
           style={{ ['--cg-panel-w' as never]: `${panelW}px` }}
         >
           <div
@@ -526,17 +547,26 @@ export function App() {
             onMouseDown={onResizeStart}
             title="Drag to resize"
           />
-          <div className="cg-toolbar">
+          <div className="cg-toolbar cg-toolbar-main">
             <h1>Conversation graph</h1>
             <div className="cg-spacer" />
             {openPreviews.length > 1 && (
-              <button onClick={tidyPreviews} title="Tidy previews">⊞</button>
+              <button onClick={tidyPreviews} data-tip="Tidy previews">⊞</button>
             )}
-            <button onClick={() => setDirection((d) => (d === 'TB' ? 'LR' : 'TB'))} title="Switch orientation">
+            <button onClick={() => setDirection((d) => (d === 'TB' ? 'LR' : 'TB'))} data-tip="Switch orientation">
               {direction === 'TB' ? '↓' : '→'}
             </button>
-            <button onClick={() => void load()} title="Refresh">↻</button>
-            <button onClick={() => setOpen(false)} title="Close (Esc)">✕</button>
+            <button onClick={() => void load()} data-tip="Refresh">↻</button>
+            <button
+              className="cg-iconbtn"
+              onClick={() => setFullscreen((v) => !v)}
+              data-tip={fullscreen ? 'Exit full screen (Esc)' : 'Enter full screen'}
+              aria-label={fullscreen ? 'Exit full screen' : 'Enter full screen'}
+              aria-pressed={fullscreen}
+            >
+              {fullscreen ? <ExitFullscreenIcon size={14} /> : <FullscreenIcon size={14} />}
+            </button>
+            <button onClick={() => setOpen(false)} data-tip="Close (Esc)">✕</button>
           </div>
           <div className="cg-toolbar" style={{ borderTop: 0, paddingTop: 0 }}>
             <span className="cg-status">
@@ -550,6 +580,7 @@ export function App() {
             <GraphCanvas
               tree={status.tree}
               direction={direction}
+              canJump={!fullscreen}
               onNodeClick={handleNodeClick}
               onOpenPreview={openPreview}
               previewIds={previewIds}

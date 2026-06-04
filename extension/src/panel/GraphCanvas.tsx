@@ -3,17 +3,21 @@ import {
   ReactFlow,
   Background,
   Controls,
+  ControlButton,
   MiniMap,
   Handle,
   Position,
+  useReactFlow,
   type Node,
   type Edge,
+  type Rect,
   ReactFlowProvider,
 } from '@xyflow/react';
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard, DraftQuestionCard, DraftAnswerCard, hasMedia, type DraftView } from './NodeCard';
 import { HoverPreview, type PreviewItem } from './HoverPreview';
+import { CenterIcon, PlusIcon, MinusIcon } from './icons';
 
 /** Synthetic ids for the floating draft nodes (no real message collides). While
  *  editing, only the question node exists; once generating, a child answer node
@@ -34,6 +38,8 @@ type CgNodeData = {
   locked: boolean;
   /** Tooltip explaining why the actions are disabled (shown on hover when locked). */
   lockReason?: string;
+  /** Whether click-to-jump is allowed (false in full-screen — the chat is hidden). */
+  canJump: boolean;
   // Handle sides follow the layout direction so edges anchor (and smoothstep-route)
   // from the correct card edges: TB enters top / leaves bottom, LR enters left / leaves right.
   targetPos: Position;
@@ -109,6 +115,7 @@ const NODE_TYPES = {
         node={data.node}
         jumping={data.jumping}
         isPreview={data.isPreview}
+        canJump={data.canJump}
         locked={data.locked}
         lockReason={data.lockReason}
         style={{ width: data.width, height: data.height }}
@@ -152,9 +159,44 @@ const NODE_TYPES = {
   ),
 };
 
+/**
+ * Lower-left canvas controls: zoom in / out / center. Custom buttons (React
+ * Flow's defaults are replaced) so all three share the panel's custom hover
+ * tooltip instead of the slow native `title`. The "center" button replaces the
+ * default Fit View, which can't compute bounds here — node dimensions go
+ * unmeasured inside the shadow root (the quirk `seedHandles` also works around).
+ * `fitBounds` needs only the pane size + an explicit rect, so it gets the active
+ * branch's bounds (from the dagre layout) and recenters on the conversation.
+ */
+function CanvasControls({ bounds }: { bounds: Rect | null }) {
+  const { zoomIn, zoomOut, fitBounds, fitView } = useReactFlow();
+  const recenter = useCallback(() => {
+    if (bounds && bounds.width > 0 && bounds.height > 0) {
+      fitBounds(bounds, { padding: 0.2, duration: 400 });
+    } else {
+      void fitView({ padding: 0.2, duration: 400 });
+    }
+  }, [bounds, fitBounds, fitView]);
+  return (
+    <>
+      <ControlButton onClick={() => zoomIn({ duration: 200 })} data-tip="Zoom in" aria-label="Zoom in">
+        <PlusIcon />
+      </ControlButton>
+      <ControlButton onClick={() => zoomOut({ duration: 200 })} data-tip="Zoom out" aria-label="Zoom out">
+        <MinusIcon />
+      </ControlButton>
+      <ControlButton onClick={recenter} data-tip="Center on the active branch" aria-label="Center on the active branch">
+        <CenterIcon />
+      </ControlButton>
+    </>
+  );
+}
+
 export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
+  /** Whether click-to-jump is allowed (false in full-screen — the chat is hidden). */
+  canJump: boolean;
   onNodeClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
   previewIds: Set<string>;
@@ -176,6 +218,7 @@ export type GraphCanvasProps = {
 export function GraphCanvas({
   tree,
   direction = 'TB',
+  canJump,
   onNodeClick,
   onOpenPreview,
   previewIds,
@@ -313,6 +356,23 @@ export function GraphCanvas({
   const targetPos = isTB ? Position.Top : Position.Left;
   const sourcePos = isTB ? Position.Bottom : Position.Right;
 
+  // Bounding rect of the active-path nodes (excludes any draft) — what the
+  // lower-left "center" control fits to, so it frames the current conversation
+  // (down to its most recent message) rather than the whole sprawling tree.
+  const activeBounds = useMemo<Rect | null>(() => {
+    const activeSet = new Set(tree.activePath);
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, found = false;
+    for (const n of laid) {
+      if (n.id === DRAFT_Q_ID || n.id === DRAFT_A_ID || !activeSet.has(n.id)) continue;
+      found = true;
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + n.width);
+      maxY = Math.max(maxY, n.y + n.height);
+    }
+    return found ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null;
+  }, [laid, tree]);
+
   // ---- Real message nodes ----
   // Referentially stable while a draft streams (no draft-content deps), so React
   // Flow doesn't re-render every card on each streamed token.
@@ -340,6 +400,7 @@ export function GraphCanvas({
             isPreview: previewIds.has(dn.id),
             locked,
             lockReason,
+            canJump,
             targetPos,
             sourcePos,
             onPreview: handlePreview,
@@ -353,7 +414,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, canJump, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).
@@ -468,7 +529,9 @@ export function GraphCanvas({
           onMoveEnd={handleMoveEnd}
         >
           <Background gap={24} size={1} color="var(--cg-border)" />
-          <Controls showInteractive={false} />
+          <Controls showZoom={false} showFitView={false} showInteractive={false}>
+            <CanvasControls bounds={activeBounds} />
+          </Controls>
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
