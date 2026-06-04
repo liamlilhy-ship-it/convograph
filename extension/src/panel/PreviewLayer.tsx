@@ -1,14 +1,21 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import { FullPreview } from './FullPreview';
-import { UserIcon, ClaudeIcon } from './icons';
+import { renderMarkdown } from './markdown';
+import { UserIcon, ClaudeIcon, FileIcon } from './icons';
 
-/** One open floating preview window: the node plus its window geometry. Stacking
- *  is by array order (focus moves a window to the end), so no per-window z is
- *  needed — all windows share one z just above the side panel. */
+/** A generated document (Artifacts feature) opened in its own window. Carries the
+ *  full inline text so it renders without touching claude's native preview. */
+export type ArtifactView = { id: string; title: string; type?: string; content: string };
+
+/** One open floating preview window: a node OR an artifact, plus window geometry.
+ *  Stacking is by array order (focus moves a window to the end), so no per-window z
+ *  is needed — all windows share one z just above the side panel. The `key`
+ *  (node.id, or `artifact:<id>`) dedupes: reopening focuses instead of duplicating. */
 export type OpenPreview = {
-  key: string; // === node.id; reopening the same node focuses instead of duplicating
-  node: DisplayNode;
+  key: string;
+  node?: DisplayNode;
+  artifact?: ArtifactView;
   x: number;
   y: number;
   w: number;
@@ -75,7 +82,7 @@ function PreviewWindow({
   onFocus: (key: string) => void;
   onGeometry: (key: string, geo: Geometry) => void;
 }) {
-  const { key, node, x, y, w, h } = pv;
+  const { key, node, artifact, x, y, w, h } = pv;
   // While dragging/resizing we lay a full-viewport mask so the cursor can't fall
   // into a preview's <iframe> (which would swallow the mousemove and freeze the drag).
   const [active, setActive] = useState<null | 'move' | 'resize'>(null);
@@ -131,8 +138,10 @@ function PreviewWindow({
     [key, x, y, w, h, onFocus, onGeometry],
   );
 
-  const isHuman = node.role === 'human';
-  const title = node.preview.title || (isHuman ? 'Question' : 'Answer');
+  const isHuman = node ? node.role === 'human' : false;
+  const title = artifact
+    ? artifact.title
+    : node!.preview.title || (isHuman ? 'Question' : 'Answer');
 
   return (
     <>
@@ -143,7 +152,7 @@ function PreviewWindow({
       >
         <div className="cg-pv-head" onMouseDown={startDrag}>
           <span className="cg-pv-role-dot">
-            {isHuman ? <UserIcon size={11} /> : <ClaudeIcon size={11} />}
+            {artifact ? <FileIcon size={11} /> : isHuman ? <UserIcon size={11} /> : <ClaudeIcon size={11} />}
           </span>
           <span className="cg-pv-title">{title}</span>
           <div className="cg-pv-fontctl" onMouseDown={(e) => e.stopPropagation()}>
@@ -180,7 +189,7 @@ function PreviewWindow({
           </button>
         </div>
         <div className="cg-pv-body">
-          <FullPreview node={node} />
+          {artifact ? <ArtifactPreview artifact={artifact} /> : <FullPreview node={node!} />}
         </div>
         <div
           className="cg-pv-resize"
@@ -195,5 +204,20 @@ function PreviewWindow({
         />
       )}
     </>
+  );
+}
+
+/** Renders a generated document's inline text as markdown — same `.cg-pv-md`
+ *  treatment (and A−/A+ font scaling) as a node's full preview. */
+function ArtifactPreview({ artifact }: { artifact: ArtifactView }) {
+  const html = useMemo(() => renderMarkdown(artifact.content), [artifact.content]);
+  return (
+    <div className="cg-pv-content">
+      <div className="cg-pv-role">
+        <FileIcon size={12} />
+        {artifact.type ? artifact.type.toUpperCase() : 'Document'}
+      </div>
+      <div className="cg-pv-md" dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   ReactFlowProvider,
 } from '@xyflow/react';
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
+import type { ArtifactRef } from '../tree/contentKinds';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard, DraftQuestionCard, DraftAnswerCard, hasMedia, type DraftView } from './NodeCard';
 import { HoverPreview, type PreviewItem } from './HoverPreview';
@@ -46,6 +47,7 @@ type CgNodeData = {
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
   onOpenPreview: (n: DisplayNode) => void;
+  onOpenArtifact: (a: ArtifactRef) => void;
   onTogglePreview: (n: DisplayNode) => void;
   onStartEdit: (n: DisplayNode) => void;
   onStartFollowup: (n: DisplayNode) => void;
@@ -120,6 +122,7 @@ const NODE_TYPES = {
         onPreviewEnd={data.onPreviewEnd}
         onClick={data.onClick}
         onOpenPreview={data.onOpenPreview}
+        onOpenArtifact={data.onOpenArtifact}
         onTogglePreview={data.onTogglePreview}
         onStartEdit={data.onStartEdit}
         onStartFollowup={data.onStartFollowup}
@@ -194,6 +197,7 @@ export type GraphCanvasProps = {
   direction?: LayoutDirection;
   onNodeClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
+  onOpenArtifact: (a: ArtifactRef) => void;
   previewIds: Set<string>;
   onToggleInlinePreview: (node: DisplayNode) => void;
   jumpingId?: string | null;
@@ -215,6 +219,7 @@ export function GraphCanvas({
   direction = 'TB',
   onNodeClick,
   onOpenPreview,
+  onOpenArtifact,
   previewIds,
   onToggleInlinePreview,
   jumpingId,
@@ -400,6 +405,7 @@ export function GraphCanvas({
             onPreviewEnd: handlePreviewEnd,
             onClick: onNodeClick,
             onOpenPreview,
+            onOpenArtifact,
             onTogglePreview: onToggleInlinePreview,
             onStartEdit,
             onStartFollowup,
@@ -407,7 +413,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenArtifact, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).

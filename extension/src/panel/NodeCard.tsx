@@ -61,6 +61,8 @@ export type NodeCardProps = HoverApi & {
   lockReason?: string;
   onClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
+  /** Open a generated document (Artifacts) in a floating preview window. */
+  onOpenArtifact?: (a: ArtifactRef) => void;
   onTogglePreview: (node: DisplayNode) => void;
   onStartEdit: (node: DisplayNode) => void;
   onStartFollowup: (node: DisplayNode) => void;
@@ -85,6 +87,7 @@ export function NodeCard({
   onPreviewEnd,
   onClick,
   onOpenPreview,
+  onOpenArtifact,
   onTogglePreview,
   onStartEdit,
   onStartFollowup,
@@ -241,6 +244,7 @@ export function NodeCard({
             artifacts={collectArtifacts(p)}
             thumbs={collectThumbs(p)}
             hover={hover}
+            onOpenArtifact={onOpenArtifact}
           />
         </>
       )}
@@ -478,17 +482,19 @@ function Footer({
   artifacts,
   thumbs,
   hover,
+  onOpenArtifact,
 }: {
   files: FileRef[];
   artifacts: ArtifactRef[];
   thumbs: Thumb[];
   hover: HoverApi;
+  onOpenArtifact?: (a: ArtifactRef) => void;
 }) {
   if (!files.length && !artifacts.length && !thumbs.length) return null;
   return (
     <div className="cg-foot">
       <FileStrip files={files} />
-      <ArtifactStrip artifacts={artifacts} />
+      <ArtifactStrip artifacts={artifacts} onOpenArtifact={onOpenArtifact} />
       <ThumbStrip thumbs={thumbs} hover={hover} />
     </div>
   );
@@ -530,18 +536,42 @@ function collectArtifacts(p: NodePreview): ArtifactRef[] {
   return out;
 }
 
-/** Static rows listing the files Claude generated (full name + type). */
-function ArtifactStrip({ artifacts }: { artifacts: ArtifactRef[] }) {
+/** Rows listing the files Claude generated (full name + type). Artifacts that
+ *  carry inline content (the Artifacts feature) are clickable — click opens the
+ *  document in a floating preview window; sandbox-only files stay static. */
+function ArtifactStrip({
+  artifacts,
+  onOpenArtifact,
+}: {
+  artifacts: ArtifactRef[];
+  onOpenArtifact?: (a: ArtifactRef) => void;
+}) {
   if (!artifacts.length) return null;
   return (
     <div className="cg-artifacts">
-      {artifacts.map((af, i) => (
-        <div key={i} className="cg-artifact" title={af.name}>
-          <FileIcon size={12} />
-          <span className="cg-artifact-name">{af.name}</span>
-          {af.type && <span className="cg-muted cg-artifact-type">{prettyType(af.type)}</span>}
-        </div>
-      ))}
+      {artifacts.map((af, i) => {
+        const clickable = !!(af.content && onOpenArtifact);
+        return (
+          <div
+            key={i}
+            className="cg-artifact"
+            data-clickable={clickable ? 'true' : undefined}
+            title={clickable ? `Open ${af.name}` : af.name}
+            onClick={
+              clickable
+                ? (e) => {
+                    e.stopPropagation();
+                    onOpenArtifact!(af);
+                  }
+                : undefined
+            }
+          >
+            <FileIcon size={12} />
+            <span className="cg-artifact-name">{af.name}</span>
+            {af.type && <span className="cg-muted cg-artifact-type">{prettyType(af.type)}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }

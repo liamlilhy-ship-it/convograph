@@ -442,6 +442,9 @@
   color: inherit;
   font-size: 11px;
 }
+/* Artifacts with inline content open a preview on click — show it's interactive. */
+.cg-node .cg-artifact[data-clickable="true"] { cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
+.cg-node .cg-artifact[data-clickable="true"]:hover { border-color: var(--cg-accent); background: var(--cg-accent-soft); }
 .cg-node .cg-artifact svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
 /* Full filename always visible: wrap (and break long unbroken names) so it
    stays inside the card's right padding. */

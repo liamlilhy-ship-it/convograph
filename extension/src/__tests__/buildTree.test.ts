@@ -73,6 +73,65 @@ describe('buildTree', () => {
     );
   });
 
+  it('parses the `artifacts` tool into a clickable artifact (latest version wins, content inline)', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-06-04T10:00:00Z',
+          content: [
+            { type: 'text', text: 'Your report is ready.' },
+            {
+              type: 'tool_use',
+              name: 'artifacts',
+              input: { command: 'create', id: 'art-1', title: 'Research Report', type: 'text/markdown', content: '# Draft' },
+            },
+            // a rewrite re-emits the same id → must supersede the create
+            {
+              type: 'tool_use',
+              name: 'artifacts',
+              input: { command: 'rewrite', id: 'art-1', title: 'Research Report', type: 'text/markdown', content: '# Final\n\nbody' },
+            },
+          ],
+        },
+      ],
+    };
+    const kinds = buildTree(conv).byId.get('a1')!.preview.kinds;
+    const art = kinds.find((k) => k.kind === 'artifact');
+    expect(art && art.kind === 'artifact' ? art.items.length : 0).toBe(1); // deduped by id
+    if (art && art.kind === 'artifact') {
+      expect(art.items[0]?.name).toBe('Research Report');
+      expect(art.items[0]?.type).toBe('markdown');
+      expect(art.items[0]?.id).toBe('art-1');
+      expect(art.items[0]?.content).toBe('# Final\n\nbody'); // latest version
+    }
+  });
+
+  it('ignores an `artifacts` tool call with no inline content', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-06-04T10:00:00Z',
+          content: [
+            { type: 'text', text: 'hi' },
+            { type: 'tool_use', name: 'artifacts', input: { command: 'update', id: 'art-1' } },
+          ],
+        },
+      ],
+    };
+    const kinds = buildTree(conv).byId.get('a1')!.preview.kinds;
+    expect(kinds.some((k) => k.kind === 'artifact')).toBe(false);
+  });
+
   it('reads claude.ai legacy `files` shape (uuid key, file_kind image/blob, size_bytes)', () => {
     const conv: ApiConversation = {
       uuid: 'c',

@@ -111,6 +111,24 @@ function mediaOf(msg: ApiMessage): MediaRefs {
         seenArtifact.add(name);
         artifacts.push({ name, type });
       }
+    } else if (c.name === 'artifacts') {
+      // The Artifacts feature ("Claude Document"). Unlike present_files, the full
+      // text is inline in `input.content`, so we can preview it ourselves. The
+      // create/update/rewrite commands re-emit the same `id` → keep the latest.
+      const input = c.input ?? {};
+      const content = typeof input.content === 'string' ? input.content : '';
+      if (!content) continue;
+      const id = typeof input.id === 'string' ? input.id : undefined;
+      const rawTitle = typeof input.title === 'string' ? input.title.trim() : '';
+      const ref: ArtifactRef = {
+        name: rawTitle || 'Document',
+        type: artifactType(typeof input.type === 'string' ? input.type : undefined),
+        id,
+        content,
+      };
+      const at = id ? artifacts.findIndex((a) => a.id === id) : -1;
+      if (at >= 0) artifacts[at] = ref; // update/rewrite supersedes the earlier version
+      else artifacts.push(ref);
     }
   }
 
@@ -165,6 +183,17 @@ function typeFromName(name?: string): string | undefined {
 function cleanType(t?: string): string | undefined {
   if (!t || t === 'blob' || t === 'file') return undefined;
   return t;
+}
+
+/** Short display type for an Artifacts MIME (e.g. "text/markdown" → "markdown",
+ *  "application/vnd.ant.code" → "code"). Falls back to the MIME subtype. */
+function artifactType(mime?: string): string | undefined {
+  if (!mime) return undefined;
+  if (mime.includes('markdown')) return 'markdown';
+  if (mime.includes('html')) return 'html';
+  if (mime === 'image/svg+xml') return 'svg';
+  if (mime === 'application/vnd.ant.code') return 'code';
+  return mime.split('/').pop() || undefined;
 }
 
 export function buildTree(conv: ApiConversation): BuiltTree {

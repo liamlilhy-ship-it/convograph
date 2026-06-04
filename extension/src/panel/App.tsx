@@ -3,7 +3,8 @@ import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromU
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
-import { PreviewLayer, DEFAULT_FS, type OpenPreview, type Geometry } from './PreviewLayer';
+import { PreviewLayer, DEFAULT_FS, type OpenPreview, type ArtifactView, type Geometry } from './PreviewLayer';
+import type { ArtifactRef } from '../tree/contentKinds';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
 import { jumpToNode, requestRefresh, scrollChatToNode } from '../navigation/jumpToNode';
@@ -141,6 +142,24 @@ export function App() {
       const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
       const y = Math.max(0, Math.min(72 + step, window.innerHeight - H - 16));
       return [...prev, { key: node.id, node, x, y, w: W, h: H }];
+    });
+  }, []);
+
+  // Open a generated document (Artifacts feature) in its own floating window. Same
+  // window chrome as a node preview; keyed by artifact id so reopening focuses.
+  const openArtifact = useCallback((a: ArtifactRef) => {
+    if (!a.content) return;
+    const key = `artifact:${a.id ?? a.name}`;
+    setOpenPreviews((prev) => {
+      const existing = prev.find((p) => p.key === key);
+      if (existing) return [...prev.filter((p) => p.key !== key), existing];
+      const W = 620;
+      const H = 520;
+      const step = (cascadeRef.current++ % 6) * 28;
+      const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
+      const y = Math.max(0, Math.min(72 + step, window.innerHeight - H - 16));
+      const artifact: ArtifactView = { id: a.id ?? a.name, title: a.name, type: a.type, content: a.content! };
+      return [...prev, { key, artifact, x, y, w: W, h: H }];
     });
   }, []);
 
@@ -607,6 +626,7 @@ export function App() {
               direction={direction}
               onNodeClick={handleNodeClick}
               onOpenPreview={openPreview}
+              onOpenArtifact={openArtifact}
               previewIds={previewIds}
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}

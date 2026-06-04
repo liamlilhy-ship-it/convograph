@@ -13,11 +13,14 @@ export type FileRef = { name: string; type?: string; size?: number; url?: string
  */
 export type WidgetRef = { title?: string; code: string; isSvg: boolean };
 /**
- * A file Claude generated and presented at the end of an answer (claude.ai's
- * `present_files` tool). The bytes live only in the sandbox — there's no URL —
- * so we carry just the name + type and open claude's own preview on click.
+ * A file Claude generated and presented at the end of an answer. Two sources:
+ *  - `present_files`: bytes live only in the sandbox (no URL, no inline text), so
+ *    we carry just name + type.
+ *  - `artifacts` (the Artifacts feature / "Claude Document"): the full text is
+ *    inline, so `content` is set and we render our own preview on click. `id` is
+ *    the artifact id — dedupes create/update versions and keys the preview window.
  */
-export type ArtifactRef = { name: string; type?: string };
+export type ArtifactRef = { name: string; type?: string; id?: string; content?: string };
 /** Media extracted from a message's non-text fields, passed into detectKinds. */
 export type MediaRefs = {
   images: ImageRef[];
