@@ -166,6 +166,7 @@ function mediaOf(msg: ApiMessage): MediaRefs {
         name: a.file_name,
         type: typeFromName(a.file_name) ?? cleanType(a.file_type),
         size: a.file_size,
+        content: a.extracted_content || undefined,
       });
     }
   }

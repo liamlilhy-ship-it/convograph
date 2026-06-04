@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import type { DisplayNode } from '../tree/displayTree';
 import { renderMarkdown } from './markdown';
 import { formatModelName } from './modelName';
-import type { ContentKind, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
+import type { ContentKind, ImageRef, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import {
   CodeIcon,
@@ -31,6 +31,14 @@ type HoverApi = {
   onPreview: (item: PreviewItem, rect: DOMRect) => void;
   onPreviewEnd: () => void;
 };
+
+/** A footer attachment the user clicked to open in a floating preview window:
+ *  a generated document, an image, a widget, or an uploaded file. */
+export type FooterItem =
+  | { kind: 'artifact'; artifact: ArtifactRef }
+  | { kind: 'image'; image: ImageRef }
+  | { kind: 'widget'; widget: WidgetRef }
+  | { kind: 'file'; file: FileRef };
 
 /** The kind of draft a quick-action spawns. `edit`/`followup` are editable;
  *  `regenerate` is a read-only copy of the question that fires immediately. */
@@ -61,8 +69,9 @@ export type NodeCardProps = HoverApi & {
   lockReason?: string;
   onClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
-  /** Open a generated document (Artifacts) in a floating preview window. */
-  onOpenArtifact?: (a: ArtifactRef) => void;
+  /** Open a footer attachment (document / image / widget / file) in a floating
+   *  preview window. */
+  onOpenMedia?: (item: FooterItem) => void;
   onTogglePreview: (node: DisplayNode) => void;
   onStartEdit: (node: DisplayNode) => void;
   onStartFollowup: (node: DisplayNode) => void;
@@ -87,7 +96,7 @@ export function NodeCard({
   onPreviewEnd,
   onClick,
   onOpenPreview,
-  onOpenArtifact,
+  onOpenMedia,
   onTogglePreview,
   onStartEdit,
   onStartFollowup,
@@ -244,7 +253,7 @@ export function NodeCard({
             artifacts={collectArtifacts(p)}
             thumbs={collectThumbs(p)}
             hover={hover}
-            onOpenArtifact={onOpenArtifact}
+            onOpenMedia={onOpenMedia}
           />
         </>
       )}
@@ -482,20 +491,20 @@ function Footer({
   artifacts,
   thumbs,
   hover,
-  onOpenArtifact,
+  onOpenMedia,
 }: {
   files: FileRef[];
   artifacts: ArtifactRef[];
   thumbs: Thumb[];
   hover: HoverApi;
-  onOpenArtifact?: (a: ArtifactRef) => void;
+  onOpenMedia?: (item: FooterItem) => void;
 }) {
   if (!files.length && !artifacts.length && !thumbs.length) return null;
   return (
     <div className="cg-foot">
-      <FileStrip files={files} />
-      <ArtifactStrip artifacts={artifacts} onOpenArtifact={onOpenArtifact} />
-      <ThumbStrip thumbs={thumbs} hover={hover} />
+      <FileStrip files={files} onOpenMedia={onOpenMedia} />
+      <ArtifactStrip artifacts={artifacts} onOpenMedia={onOpenMedia} />
+      <ThumbStrip thumbs={thumbs} hover={hover} onOpenMedia={onOpenMedia} />
     </div>
   );
 }
@@ -512,17 +521,41 @@ function collectFiles(p: NodePreview): FileRef[] {
   return [];
 }
 
-function FileStrip({ files }: { files: FileRef[] }) {
+/** Uploaded-file rows. A row is clickable when we have something to show —
+ *  extracted text and/or a preview URL; bare-name placeholders stay static. */
+function FileStrip({
+  files,
+  onOpenMedia,
+}: {
+  files: FileRef[];
+  onOpenMedia?: (item: FooterItem) => void;
+}) {
   if (!files.length) return null;
   return (
     <div className="cg-files">
-      {files.map((f, i) => (
-        <div key={i} className="cg-file" title={f.name}>
-          <AttachmentIcon size={12} />
-          <span className="cg-file-name">{f.name}</span>
-          {fileMeta(f) && <span className="cg-muted cg-file-meta">{fileMeta(f)}</span>}
-        </div>
-      ))}
+      {files.map((f, i) => {
+        const clickable = !!((f.content || f.url) && onOpenMedia);
+        return (
+          <div
+            key={i}
+            className="cg-file"
+            data-clickable={clickable ? 'true' : undefined}
+            title={clickable ? `Open ${f.name}` : f.name}
+            onClick={
+              clickable
+                ? (e) => {
+                    e.stopPropagation();
+                    onOpenMedia!({ kind: 'file', file: f });
+                  }
+                : undefined
+            }
+          >
+            <AttachmentIcon size={12} />
+            <span className="cg-file-name">{f.name}</span>
+            {fileMeta(f) && <span className="cg-muted cg-file-meta">{fileMeta(f)}</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -541,16 +574,16 @@ function collectArtifacts(p: NodePreview): ArtifactRef[] {
  *  document in a floating preview window; sandbox-only files stay static. */
 function ArtifactStrip({
   artifacts,
-  onOpenArtifact,
+  onOpenMedia,
 }: {
   artifacts: ArtifactRef[];
-  onOpenArtifact?: (a: ArtifactRef) => void;
+  onOpenMedia?: (item: FooterItem) => void;
 }) {
   if (!artifacts.length) return null;
   return (
     <div className="cg-artifacts">
       {artifacts.map((af, i) => {
-        const clickable = !!(af.content && onOpenArtifact);
+        const clickable = !!(af.content && onOpenMedia);
         return (
           <div
             key={i}
@@ -561,7 +594,7 @@ function ArtifactStrip({
               clickable
                 ? (e) => {
                     e.stopPropagation();
-                    onOpenArtifact!(af);
+                    onOpenMedia!({ kind: 'artifact', artifact: af });
                   }
                 : undefined
             }
@@ -604,21 +637,37 @@ function collectThumbs(p: NodePreview): Thumb[] {
 
 const MAX_THUMBS = 3;
 
-function ThumbStrip({ thumbs, hover }: { thumbs: Thumb[]; hover: HoverApi }) {
+function ThumbStrip({
+  thumbs,
+  hover,
+  onOpenMedia,
+}: {
+  thumbs: Thumb[];
+  hover: HoverApi;
+  onOpenMedia?: (item: FooterItem) => void;
+}) {
   if (!thumbs.length) return null;
   const shown = thumbs.slice(0, MAX_THUMBS);
   const extra = thumbs.length - shown.length;
   return (
     <div className="cg-thumbstrip">
       {shown.map((th, i) => (
-        <ThumbTile key={i} thumb={th} hover={hover} />
+        <ThumbTile key={i} thumb={th} hover={hover} onOpenMedia={onOpenMedia} />
       ))}
       {extra > 0 && <span className="cg-muted cg-thumb-more">+{extra}</span>}
     </div>
   );
 }
 
-function ThumbTile({ thumb, hover }: { thumb: Thumb; hover: HoverApi }) {
+function ThumbTile({
+  thumb,
+  hover,
+  onOpenMedia,
+}: {
+  thumb: Thumb;
+  hover: HoverApi;
+  onOpenMedia?: (item: FooterItem) => void;
+}) {
   if (thumb.t === 'img') {
     return (
       <a
@@ -627,7 +676,17 @@ function ThumbTile({ thumb, hover }: { thumb: Thumb; hover: HoverApi }) {
         target="_blank"
         rel="noreferrer"
         title={thumb.title || 'image'}
-        onClick={(e) => e.stopPropagation()}
+        // Plain click → floating preview; cmd/ctrl/shift-click falls through to the
+        // anchor's default (open the original in a new tab).
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.metaKey || e.ctrlKey || e.shiftKey || !onOpenMedia) return;
+          e.preventDefault();
+          onOpenMedia({
+            kind: 'image',
+            image: { thumbUrl: thumb.src, fullUrl: thumb.href, name: thumb.title },
+          });
+        }}
         onMouseEnter={(e) =>
           hover.onPreview(
             { kind: 'image', src: thumb.href, title: thumb.title },
@@ -647,12 +706,21 @@ function ThumbTile({ thumb, hover }: { thumb: Thumb; hover: HoverApi }) {
       </div>
     );
   }
-  // svg | wicon — both hoverable widgets
+  // svg | wicon — both hoverable widgets; click opens the floating preview.
   const w = thumb.w;
   return (
     <div
       className={thumb.t === 'svg' ? 'cg-wthumb' : 'cg-wthumb cg-wthumb-label'}
+      data-clickable={onOpenMedia ? 'true' : undefined}
       title={w.title || 'visualization'}
+      onClick={
+        onOpenMedia
+          ? (e) => {
+              e.stopPropagation();
+              onOpenMedia({ kind: 'widget', widget: w });
+            }
+          : undefined
+      }
       onMouseEnter={(e) =>
         hover.onPreview({ kind: 'widget', widget: w }, (e.currentTarget as HTMLElement).getBoundingClientRect())
       }

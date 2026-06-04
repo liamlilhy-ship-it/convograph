@@ -442,9 +442,13 @@
   color: inherit;
   font-size: 11px;
 }
-/* Artifacts with inline content open a preview on click — show it's interactive. */
-.cg-node .cg-artifact[data-clickable="true"] { cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
-.cg-node .cg-artifact[data-clickable="true"]:hover { border-color: var(--cg-accent); background: var(--cg-accent-soft); }
+/* Footer rows / tiles that open a floating preview on click — show interactivity.
+   (Image tiles are <a>, already pointer; widget tiles get pointer here.) */
+.cg-node .cg-artifact[data-clickable="true"],
+.cg-node .cg-file[data-clickable="true"] { cursor: pointer; transition: border-color 120ms ease, background 120ms ease; }
+.cg-node .cg-artifact[data-clickable="true"]:hover,
+.cg-node .cg-file[data-clickable="true"]:hover { border-color: var(--cg-accent); background: var(--cg-accent-soft); }
+.cg-node .cg-wthumb[data-clickable="true"] { cursor: pointer; }
 .cg-node .cg-artifact svg { flex-shrink: 0; margin-top: 1px; color: var(--cg-fg-muted); }
 /* Full filename always visible: wrap (and break long unbroken names) so it
    stays inside the card's right padding. */
@@ -1177,6 +1181,42 @@
   font-size: 12px;
   padding: 18px 0;
 }
+
+/* Dedicated image / widget windows: fill the body so the content scales with the
+   window (and resizes with it) instead of sitting in a fixed-height box. */
+.cg-pv-media { height: 100%; display: flex; flex-direction: column; gap: 10px; }
+.cg-pv-imgview {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+}
+.cg-pv-imgview img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--cg-border);
+  border-radius: 8px;
+}
+.cg-pv-media .cg-pv-widget-frame { flex: 1 1 auto; height: auto; min-height: 0; margin: 0; }
+.cg-pv-media .cg-pv-widget-img { margin: 0; align-self: flex-start; }
+/* Uploaded-file window: the extracted text, shown verbatim (selectable, wrapped). */
+.cg-pv-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--cg-pv-fs, 18px);
+  line-height: 1.6;
+  color: var(--cg-fg);
+}
+.cg-pv-openlink {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--cg-accent);
+  text-decoration: underline;
+}
+.cg-pv-media .cg-pv-openlink { flex: 0 0 auto; margin-top: 0; }
 
 /* Artifact / attachment rows (same markup as the card footer, re-scoped here) */
 .cg-pv-content .cg-muted { color: var(--cg-fg-muted); }

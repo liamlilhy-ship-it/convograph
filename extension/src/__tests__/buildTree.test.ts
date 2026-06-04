@@ -73,6 +73,33 @@ describe('buildTree', () => {
     );
   });
 
+  it('carries an attachment\'s extracted_content onto the FileRef (for previewing)', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'h1',
+      chat_messages: [
+        {
+          uuid: 'h1',
+          parent_message_uuid: null,
+          sender: 'human',
+          created_at: '2026-06-04T10:00:00Z',
+          content: [{ type: 'text', text: 'see file' }],
+          attachments: [
+            { id: 'a1', file_name: 'excerpt.txt', file_type: 'text/plain', file_size: 273, extracted_content: 'The quick brown fox.' },
+            { id: 'a2', file_name: 'empty.txt' }, // no extracted_content → content stays undefined
+          ],
+        },
+      ],
+    };
+    const att = buildTree(conv).byId.get('h1')!.preview.kinds.find((k) => k.kind === 'attachment');
+    if (att && att.kind === 'attachment') {
+      const withText = att.files.find((f) => f.name === 'excerpt.txt');
+      const without = att.files.find((f) => f.name === 'empty.txt');
+      expect(withText?.content).toBe('The quick brown fox.');
+      expect(without?.content).toBeUndefined();
+    }
+  });
+
   it('parses the `artifacts` tool into a clickable artifact (latest version wins, content inline)', () => {
     const conv: ApiConversation = {
       uuid: 'c',

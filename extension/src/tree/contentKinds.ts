@@ -4,8 +4,9 @@ export type LinkItem = { text: string; url: string };
 
 /** Model-agnostic image reference (the adapter maps each provider's shape to this). */
 export type ImageRef = { thumbUrl: string; fullUrl?: string; name?: string };
-/** Model-agnostic file reference. `url` may be absent (e.g. extracted-text docs). */
-export type FileRef = { name: string; type?: string; size?: number; url?: string };
+/** Model-agnostic file reference. `url` may be absent (e.g. extracted-text docs);
+ *  `content` is the text claude.ai extracted from an upload, when available. */
+export type FileRef = { name: string; type?: string; size?: number; url?: string; content?: string };
 /**
  * A rendered visualization a tool produced inline (claude.ai's
  * `visualize:show_widget`). `code` is self-contained markup; `isSvg` flags the

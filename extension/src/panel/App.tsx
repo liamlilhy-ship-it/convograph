@@ -3,13 +3,12 @@ import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromU
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
-import { PreviewLayer, DEFAULT_FS, type OpenPreview, type ArtifactView, type Geometry } from './PreviewLayer';
-import type { ArtifactRef } from '../tree/contentKinds';
+import { PreviewLayer, DEFAULT_FS, type OpenPreview, type PreviewContent, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
 import { jumpToNode, requestRefresh, scrollChatToNode } from '../navigation/jumpToNode';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from '../api/chatClient';
-import type { DraftKind } from './NodeCard';
+import type { DraftKind, FooterItem } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
 import { FullscreenIcon, ExitFullscreenIcon } from './icons';
 
@@ -130,26 +129,10 @@ export function App() {
   // there's no side panel to make room for (and the native chat is hidden).
   usePagePushRight(open && !fullscreen, panelW);
 
-  // ---- Full-preview windows ----
-  const openPreview = useCallback((node: DisplayNode) => {
-    setOpenPreviews((prev) => {
-      // Reopen → focus (move to end of the stack) instead of duplicating.
-      const existing = prev.find((p) => p.key === node.id);
-      if (existing) return [...prev.filter((p) => p.key !== node.id), existing];
-      const W = 620;
-      const H = 520;
-      const step = (cascadeRef.current++ % 6) * 28; // cascade so windows never spawn exactly stacked
-      const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
-      const y = Math.max(0, Math.min(72 + step, window.innerHeight - H - 16));
-      return [...prev, { key: node.id, node, x, y, w: W, h: H }];
-    });
-  }, []);
-
-  // Open a generated document (Artifacts feature) in its own floating window. Same
-  // window chrome as a node preview; keyed by artifact id so reopening focuses.
-  const openArtifact = useCallback((a: ArtifactRef) => {
-    if (!a.content) return;
-    const key = `artifact:${a.id ?? a.name}`;
+  // ---- Floating preview windows ----
+  // Shared placement: reopening the same key focuses it (move to end of the stack);
+  // otherwise a new window cascades in so stacked windows never perfectly overlap.
+  const addPreview = useCallback((key: string, content: PreviewContent) => {
     setOpenPreviews((prev) => {
       const existing = prev.find((p) => p.key === key);
       if (existing) return [...prev.filter((p) => p.key !== key), existing];
@@ -158,10 +141,49 @@ export function App() {
       const step = (cascadeRef.current++ % 6) * 28;
       const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
       const y = Math.max(0, Math.min(72 + step, window.innerHeight - H - 16));
-      const artifact: ArtifactView = { id: a.id ?? a.name, title: a.name, type: a.type, content: a.content! };
-      return [...prev, { key, artifact, x, y, w: W, h: H }];
+      return [...prev, { key, ...content, x, y, w: W, h: H }];
     });
   }, []);
+
+  const openPreview = useCallback(
+    (node: DisplayNode) => addPreview(node.id, { kind: 'node', node }),
+    [addPreview],
+  );
+
+  // Open a footer attachment — generated document, image, widget, or uploaded file
+  // — in its own floating window. Items with nothing previewable are ignored.
+  const openMedia = useCallback(
+    (item: FooterItem) => {
+      switch (item.kind) {
+        case 'artifact': {
+          const a = item.artifact;
+          if (!a.content) return;
+          addPreview(`artifact:${a.id ?? a.name}`, {
+            kind: 'artifact',
+            artifact: { id: a.id ?? a.name, title: a.name, type: a.type, content: a.content },
+          });
+          break;
+        }
+        case 'image': {
+          const img = item.image;
+          addPreview(`image:${img.fullUrl ?? img.thumbUrl}`, { kind: 'image', image: img });
+          break;
+        }
+        case 'widget': {
+          const w = item.widget;
+          addPreview(`widget:${w.title ?? 'viz'}:${w.code.length}`, { kind: 'widget', widget: w });
+          break;
+        }
+        case 'file': {
+          const f = item.file;
+          if (!f.content && !f.url) return;
+          addPreview(`file:${f.name}:${f.size ?? f.content?.length ?? 0}`, { kind: 'file', file: f });
+          break;
+        }
+      }
+    },
+    [addPreview],
+  );
 
   const closePreview = useCallback((key: string) => {
     setOpenPreviews((prev) => prev.filter((p) => p.key !== key));
@@ -626,7 +648,7 @@ export function App() {
               direction={direction}
               onNodeClick={handleNodeClick}
               onOpenPreview={openPreview}
-              onOpenArtifact={openArtifact}
+              onOpenMedia={openMedia}
               previewIds={previewIds}
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
