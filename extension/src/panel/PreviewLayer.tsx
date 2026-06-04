@@ -22,9 +22,8 @@ const MIN_H = 200;
 // One above the side panel (2147483645), one below the hover preview (…647).
 const PV_Z = 2147483646;
 // Preview markdown font size (px). Shared across all windows so adjusting it in
-// one applies everywhere — including windows opened afterward. Default is one step
-// up from the old 13.5px.
-export const DEFAULT_FS = 15;
+// one applies everywhere — including windows opened afterward.
+export const DEFAULT_FS = 18;
 const MIN_FS = 12;
 const MAX_FS = 24;
 

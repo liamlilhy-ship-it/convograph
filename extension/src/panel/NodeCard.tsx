@@ -25,7 +25,7 @@ import { svgDataUri } from './widgetRender';
 
 // Fixed markdown font size for the in-place preview (the floating window's is
 // adjustable; the inline card's is intentionally fixed).
-const INLINE_PREVIEW_FS = 14;
+const INLINE_PREVIEW_FS = 18;
 
 type HoverApi = {
   onPreview: (item: PreviewItem, rect: DOMRect) => void;

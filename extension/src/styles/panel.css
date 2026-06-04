@@ -170,7 +170,7 @@
    tier (set inline by GraphCanvas) so same-content nodes match exactly. */
 .cg-node {
   box-sizing: border-box;
-  width: 300px;
+  width: 360px;
   display: flex;
   flex-direction: column;
   background: var(--cg-bg-elev);
@@ -278,14 +278,22 @@
   word-break: break-word;
 }
 /* Question and answer share one type treatment — same family, size, weight.
-   Text holds whole lines (flex: 0 0) so it never overlaps the block beneath it;
-   the clamp tightens to 3 lines when a footer or rich preview shares the card. */
+   Text holds whole lines (flex: 0 0) so it never overlaps the block beneath it. */
 .cg-node .cg-text {
   -webkit-line-clamp: 4;
   flex: 0 0 auto;
   font-weight: 500;
+  font-size: 18px;
 }
-.cg-node:has(.cg-foot) .cg-text,
+/* Footer (files / images / attachments) is pinned to the card's bottom edge, so
+   the snippet can run long and fill the space above it — more lines = less dead
+   gap between the text and the attachment. */
+.cg-node:has(.cg-foot) .cg-text {
+  -webkit-line-clamp: 5;
+}
+/* A rich preview (code / table / list / links) sits inline below the snippet, so
+   the snippet stays tight to leave that block room (this wins over the footer
+   rule for a card that has both). */
 .cg-node:has(.cg-rich) .cg-text {
   -webkit-line-clamp: 3;
 }

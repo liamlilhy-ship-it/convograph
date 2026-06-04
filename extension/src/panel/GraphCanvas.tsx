@@ -74,11 +74,11 @@ type CgDraftAData = {
 };
 
 // Single-role cards come in two fixed height tiers so same-content nodes match.
-const NODE_W = 300;
-const H_TEXT = 132; // text-only (and inline code/table/list/links) nodes
+const NODE_W = 360;
+const H_TEXT = 152; // text-only (and inline code/table/list/links) nodes
 const H_MEDIA = 220; // nodes with a footer (files / images / widgets)
 // In-place preview card — a fixed, scrollable reader (matches the floating window).
-const PREVIEW_W = 480;
+const PREVIEW_W = 580;
 const PREVIEW_H = 560;
 // Draft cards — a roomier box so the textarea / streaming answer fit comfortably.
 const EDITOR_W = 360;

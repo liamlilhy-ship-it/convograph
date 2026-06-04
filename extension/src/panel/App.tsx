@@ -135,7 +135,7 @@ export function App() {
       // Reopen → focus (move to end of the stack) instead of duplicating.
       const existing = prev.find((p) => p.key === node.id);
       if (existing) return [...prev.filter((p) => p.key !== node.id), existing];
-      const W = 560;
+      const W = 620;
       const H = 520;
       const step = (cascadeRef.current++ % 6) * 28; // cascade so windows never spawn exactly stacked
       const x = Math.max(0, Math.min(80 + step, window.innerWidth - W - 16));
