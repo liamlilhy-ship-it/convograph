@@ -54,9 +54,6 @@ export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
   isPreview?: boolean;
-  /** Whether clicking the card jumps to the message. False in full-screen (the
-   *  native chat that a jump would scroll is hidden), making the click inert. */
-  canJump?: boolean;
   /** A draft/generation is open somewhere — disable all quick-action buttons so a
    *  second completion can't fire concurrently (claude.ai rejects those). */
   locked?: boolean;
@@ -82,7 +79,6 @@ export function NodeCard({
   node,
   jumping,
   isPreview,
-  canJump = true,
   locked,
   lockReason,
   onPreview,
@@ -122,15 +118,14 @@ export function NodeCard({
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
       style={cardStyle}
-      onClick={isPreview || !canJump ? undefined : () => onClick(node)}
+      onClick={isPreview ? undefined : () => onClick(node)}
     >
       <div
         className="cg-head"
         // In preview mode the body is for reading (no card-level jump), so the
-        // header row becomes the click-to-jump target instead. In full-screen
-        // (!canJump) nothing jumps, so no click target / "jump" tooltip at all.
-        onClick={isPreview && canJump ? () => onClick(node) : undefined}
-        title={isPreview && canJump ? 'Jump to this message' : undefined}
+        // header row becomes the click-to-jump target instead.
+        onClick={isPreview ? () => onClick(node) : undefined}
+        title={isPreview ? 'Jump to this message' : undefined}
       >
         <span className="cg-role">
           {isHuman ? <UserIcon size={12} /> : <ClaudeIcon size={12} />}

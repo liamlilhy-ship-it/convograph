@@ -179,6 +179,16 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
   return false;
 }
 
+/**
+ * Scrolls the chat to a node's question bubble (top-aligned) WITHOUT changing the
+ * active branch. Used to re-align after exiting full-screen: the scroll done
+ * during a full-screen jump happens while the chat is hidden behind the graph and
+ * doesn't stick, so we replay it once the chat is visible again.
+ */
+export function scrollChatToNode(node: DisplayNode): Promise<boolean> {
+  return scrollToNode(node);
+}
+
 export type JumpResult = { ok: boolean; refreshed: boolean; centered?: boolean; error?: string };
 
 /**

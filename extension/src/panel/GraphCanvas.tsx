@@ -38,8 +38,6 @@ type CgNodeData = {
   locked: boolean;
   /** Tooltip explaining why the actions are disabled (shown on hover when locked). */
   lockReason?: string;
-  /** Whether click-to-jump is allowed (false in full-screen — the chat is hidden). */
-  canJump: boolean;
   // Handle sides follow the layout direction so edges anchor (and smoothstep-route)
   // from the correct card edges: TB enters top / leaves bottom, LR enters left / leaves right.
   targetPos: Position;
@@ -115,7 +113,6 @@ const NODE_TYPES = {
         node={data.node}
         jumping={data.jumping}
         isPreview={data.isPreview}
-        canJump={data.canJump}
         locked={data.locked}
         lockReason={data.lockReason}
         style={{ width: data.width, height: data.height }}
@@ -195,8 +192,6 @@ function CanvasControls({ bounds }: { bounds: Rect | null }) {
 export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
-  /** Whether click-to-jump is allowed (false in full-screen — the chat is hidden). */
-  canJump: boolean;
   onNodeClick: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
   previewIds: Set<string>;
@@ -218,7 +213,6 @@ export type GraphCanvasProps = {
 export function GraphCanvas({
   tree,
   direction = 'TB',
-  canJump,
   onNodeClick,
   onOpenPreview,
   previewIds,
@@ -400,7 +394,6 @@ export function GraphCanvas({
             isPreview: previewIds.has(dn.id),
             locked,
             lockReason,
-            canJump,
             targetPos,
             sourcePos,
             onPreview: handlePreview,
@@ -414,7 +407,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, canJump, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).

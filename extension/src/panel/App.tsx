@@ -6,7 +6,7 @@ import { GraphCanvas } from './GraphCanvas';
 import { PreviewLayer, DEFAULT_FS, type OpenPreview, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
-import { jumpToNode, requestRefresh } from '../navigation/jumpToNode';
+import { jumpToNode, requestRefresh, scrollChatToNode } from '../navigation/jumpToNode';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from '../api/chatClient';
 import type { DraftKind } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
@@ -118,6 +118,12 @@ export function App() {
   const reqRef = useRef(0);
   const cascadeRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
+  // Read full-screen synchronously inside callbacks without re-creating them.
+  const fullscreenRef = useRef(fullscreen);
+  // A node jumped to WHILE in full-screen. The chat scrolls under the full-screen
+  // cover, where it doesn't stick, so we replay the scroll on exit (when the chat
+  // is visible) to land it top-aligned like a side-panel jump.
+  const fsJumpTargetRef = useRef<DisplayNode | null>(null);
 
   // Don't push the page in full-screen — the graph covers the whole viewport, so
   // there's no side panel to make room for (and the native chat is hidden).
@@ -214,6 +220,22 @@ export function App() {
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+
+  // On EXITING full-screen, replay the scroll for the node jumped to while in
+  // full-screen: that jump's scroll happened while the chat was hidden behind the
+  // graph and didn't stick, so re-run it now that the chat is visible — landing it
+  // top-aligned, exactly like a side-panel jump.
+  useEffect(() => {
+    const exitedFullscreen = fullscreenRef.current && !fullscreen;
+    fullscreenRef.current = fullscreen;
+    if (!exitedFullscreen) return;
+    const node = fsJumpTargetRef.current;
+    fsJumpTargetRef.current = null;
+    if (!node) return;
+    // Wait for the side panel to settle before re-aligning.
+    const id = window.setTimeout(() => void scrollChatToNode(node), 280);
+    return () => clearTimeout(id);
+  }, [fullscreen]);
 
   // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
   // scroll, layout shifts, and on panel open/close (because the composer moves
@@ -323,12 +345,15 @@ export function App() {
 
   const handleNodeClick = useCallback(
     async (node: DisplayNode) => {
-      // No click-to-jump in full-screen: jumping scrolls the native chat, which
-      // is hidden behind the graph, so the click is inert.
-      if (fullscreen) return;
+      // Click-to-jump works in full-screen too: it switches the active branch
+      // (updating the graph's active-path highlight) and leaves the native chat
+      // — hidden behind the graph — scrolled to that branch for when you exit.
       const convId = parseConversationIdFromUrl();
       const orgId = orgIdRef.current;
       if (!convId || !orgId) return;
+      // In full-screen the chat is hidden, so its scroll won't stick — remember
+      // this node so we replay the scroll when the user exits full-screen.
+      if (fullscreenRef.current) fsJumpTargetRef.current = node;
       if (node.isOnActivePath) {
         // Already active — just scroll the left chat to it.
         void jumpToNode(orgId, convId, node);
@@ -347,7 +372,7 @@ export function App() {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load, fullscreen],
+    [load],
   );
 
   // ---- Quick actions via a floating draft node ----
@@ -580,7 +605,6 @@ export function App() {
             <GraphCanvas
               tree={status.tree}
               direction={direction}
-              canJump={!fullscreen}
               onNodeClick={handleNodeClick}
               onOpenPreview={openPreview}
               previewIds={previewIds}

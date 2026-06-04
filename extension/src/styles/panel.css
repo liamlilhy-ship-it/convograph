@@ -160,11 +160,6 @@
   animation: none;
 }
 .cg-panel[data-fullscreen="true"] .cg-resize { display: none; }
-/* Click-to-jump is disabled in full-screen, so nodes aren't jump targets: drop
-   the pointer cursor and the hover "lift" that implies clickability. The
-   per-node action buttons keep their own pointer cursor. */
-.cg-panel[data-fullscreen="true"] .cg-node { cursor: default; }
-.cg-panel[data-fullscreen="true"] .cg-node:hover { transform: none; }
 
 /* React Flow disables pointer events on nodes unless they're selectable/
    draggable (we turn both off). Re-enable so clicks/hovers reach our cards
