@@ -96,11 +96,31 @@ function findScroller(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-autoscroll-container]');
 }
 
+/** Drops all whitespace so containment ignores it (see bubbleMatches). */
+const collapse = (s: string): string => s.replace(/\s+/g, '');
+
+/**
+ * True when a rendered bubble's raw `textContent` contains the match `key`.
+ *
+ * Matching is WHITESPACE-INSENSITIVE: claude.ai joins consecutive block elements
+ * (list items, paragraphs) with NO separator in `textContent`, whereas the API
+ * text has newlines that `stripMarkdown` turns into spaces. So a pure list
+ * question like "1. Claude code\n2. Most recent 6 months" yields the key
+ * "...code most..." while the DOM reads "...codemost..." — `.includes` with the
+ * space would miss it. Removing whitespace from both sides bridges the gap.
+ * Pure + exported for unit tests.
+ */
+export function bubbleMatches(bubbleText: string, key: string): boolean {
+  const target = collapse(key);
+  if (!target) return false;
+  return collapse(stripMarkdown(bubbleText)).includes(target);
+}
+
 /** Finds the rendered question bubble matching `key` among mounted bubbles. */
 function findBubble(key: string): HTMLElement | null {
-  if (!key) return null;
+  if (!collapse(key)) return null;
   const bubbles = Array.from(document.querySelectorAll<HTMLElement>('[data-user-message-bubble]'));
-  return bubbles.find((b) => stripMarkdown(b.textContent ?? '').includes(key)) ?? null;
+  return bubbles.find((b) => bubbleMatches(b.textContent ?? '', key)) ?? null;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

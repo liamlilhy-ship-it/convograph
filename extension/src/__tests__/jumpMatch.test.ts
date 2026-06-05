@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stripMarkdown, matchKey } from '../navigation/jumpToNode';
+import { stripMarkdown, matchKey, bubbleMatches } from '../navigation/jumpToNode';
 
 describe('stripMarkdown', () => {
   it('drops ordered list markers so API text matches rendered DOM (newline form)', () => {
@@ -67,5 +67,36 @@ describe('matchKey', () => {
     const apiKey = matchKey(stripMarkdown('I want you to:\n1. Give a real world example of MAPI calls and protobuf'));
     const renderedKey = matchKey(stripMarkdown('I want you to:\nGive a real world example of MAPI calls and protobuf'));
     expect(apiKey).toBe(renderedKey);
+  });
+});
+
+describe('bubbleMatches', () => {
+  // The match key for a node is matchKey(stripMarkdown(questionText)).
+  const keyOf = (question: string) => matchKey(stripMarkdown(question));
+
+  it('matches a pure multi-item list question whose <li> render has no separator', () => {
+    // The reported failure: question is a bare ordered list. claude.ai renders it
+    // as <ol><li>…</li><li>…</li></ol>; textContent joins the items with NO space.
+    const question = '1. Claude code\n2. Most recent 6 months';
+    const renderedDom = 'Claude codeMost recent 6 months'; // <li> siblings, no separator
+    expect(bubbleMatches(renderedDom, keyOf(question))).toBe(true);
+  });
+
+  it('still matches when blocks DO carry a whitespace separator', () => {
+    const question = '1. Claude code\n2. Most recent 6 months';
+    expect(bubbleMatches('Claude code\nMost recent 6 months', keyOf(question))).toBe(true);
+  });
+
+  it('matches ordinary prose questions', () => {
+    const question = 'Where does the .proto file live in the repo';
+    expect(bubbleMatches(question, keyOf(question))).toBe(true);
+  });
+
+  it('does not match an unrelated bubble', () => {
+    expect(bubbleMatches('a completely different question about cats', keyOf('1. Claude code\n2. Most recent 6 months'))).toBe(false);
+  });
+
+  it('returns false for an empty key', () => {
+    expect(bubbleMatches('anything', '')).toBe(false);
   });
 });
