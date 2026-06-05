@@ -229,7 +229,7 @@ export function MinusIcon(p: IconProps) {
   );
 }
 
-/** Crosshair/target glyph — recenters the canvas on the active branch. */
+/** Crosshair/target glyph — recenters the canvas on the most recent message. */
 export function CenterIcon(p: IconProps) {
   return (
     <svg {...svgProps(p)}>

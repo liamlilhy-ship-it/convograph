@@ -88,6 +88,9 @@ const DRAFT_Q_GEN_H = 132; // read-only question while generating (answer is sep
 // One node of slack around the graph so panning stops just past the edge
 // messages rather than locking exactly to them.
 const EXTENT_PAD = 300;
+// Zoom the "center" button lands on — slightly below natural size so the most
+// recent message sits centered with breathing room, not slammed to maxZoom.
+const CENTER_ZOOM = 0.9;
 
 /** Fixed height tier for a node — text-only vs. has-footer media. */
 function tierHeight(n: DisplayNode): number {
@@ -164,18 +167,21 @@ const NODE_TYPES = {
  * tooltip instead of the slow native `title`. The "center" button replaces the
  * default Fit View, which can't compute bounds here — node dimensions go
  * unmeasured inside the shadow root (the quirk `seedHandles` also works around).
- * `fitBounds` needs only the pane size + an explicit rect, so it gets the active
- * branch's bounds (from the dagre layout) and recenters on the conversation.
+ * It centers the viewport on the most recent active-branch message (rect from the
+ * dagre layout) at a fixed reading zoom — `fitBounds` on one small card would slam
+ * to maxZoom (too close), so we pan to its center at CENTER_ZOOM instead.
  */
 function CanvasControls({ bounds }: { bounds: Rect | null }) {
-  const { zoomIn, zoomOut, fitBounds, fitView } = useReactFlow();
+  const { zoomIn, zoomOut, setCenter, fitView } = useReactFlow();
   const recenter = useCallback(() => {
     if (bounds && bounds.width > 0 && bounds.height > 0) {
-      fitBounds(bounds, { padding: 0.2, duration: 400 });
+      const cx = bounds.x + bounds.width / 2;
+      const cy = bounds.y + bounds.height / 2;
+      void setCenter(cx, cy, { zoom: CENTER_ZOOM, duration: 400 });
     } else {
       void fitView({ padding: 0.2, duration: 400 });
     }
-  }, [bounds, fitBounds, fitView]);
+  }, [bounds, setCenter, fitView]);
   return (
     <>
       <ControlButton onClick={() => zoomIn({ duration: 200 })} data-tip="Zoom in" aria-label="Zoom in">
@@ -184,7 +190,7 @@ function CanvasControls({ bounds }: { bounds: Rect | null }) {
       <ControlButton onClick={() => zoomOut({ duration: 200 })} data-tip="Zoom out" aria-label="Zoom out">
         <MinusIcon />
       </ControlButton>
-      <ControlButton onClick={recenter} data-tip="Center on the active branch" aria-label="Center on the active branch">
+      <ControlButton onClick={recenter} data-tip="Center on the most recent message" aria-label="Center on the most recent message">
         <CenterIcon />
       </ControlButton>
     </>
@@ -354,21 +360,18 @@ export function GraphCanvas({
   const targetPos = isTB ? Position.Top : Position.Left;
   const sourcePos = isTB ? Position.Bottom : Position.Right;
 
-  // Bounding rect of the active-path nodes (excludes any draft) — what the
-  // lower-left "center" control fits to, so it frames the current conversation
-  // (down to its most recent message) rather than the whole sprawling tree.
-  const activeBounds = useMemo<Rect | null>(() => {
-    const activeSet = new Set(tree.activePath);
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, found = false;
-    for (const n of laid) {
-      if (n.id === DRAFT_Q_ID || n.id === DRAFT_A_ID || !activeSet.has(n.id)) continue;
-      found = true;
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.width);
-      maxY = Math.max(maxY, n.y + n.height);
+  // Rect of the MOST RECENT message on the active branch — the last node on the
+  // active path (excludes any draft). The lower-left "center" control fits to
+  // this, so it frames the latest message up close rather than the whole active
+  // branch (let alone the sprawling tree).
+  const recentBounds = useMemo<Rect | null>(() => {
+    const byId = new Map(laid.map((n) => [n.id, n] as const));
+    const path = tree.activePath;
+    for (let i = path.length - 1; i >= 0; i--) {
+      const n = byId.get(path[i]!);
+      if (n) return { x: n.x, y: n.y, width: n.width, height: n.height };
     }
-    return found ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null;
+    return null;
   }, [laid, tree]);
 
   // ---- Real message nodes ----
@@ -528,7 +531,7 @@ export function GraphCanvas({
         >
           <Background gap={24} size={1} color="var(--cg-border)" />
           <Controls showZoom={false} showFitView={false} showInteractive={false}>
-            <CanvasControls bounds={activeBounds} />
+            <CanvasControls bounds={recentBounds} />
           </Controls>
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
