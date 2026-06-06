@@ -52,6 +52,11 @@ export type PlatformDom = {
   findComposer(): HTMLElement | null;
   /** Gap left above a bubble once aligned to top (clears the sticky header). */
   scrollTopMargin: number;
+  /** Whether to walk the scroll container to mount virtualized bubbles when a
+   *  target isn't currently rendered. Defaults to enabled (Claude — its bubbles
+   *  mount on programmatic scroll). ChatGPT sets it false: it lazy-loads history a
+   *  programmatic scroll can't fetch, so searching there just janks the chat. */
+  scrollSearch?: boolean;
 };
 
 export interface Platform {

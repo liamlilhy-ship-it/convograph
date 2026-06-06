@@ -1,5 +1,5 @@
 import type { Platform, ThemeName } from '../types';
-import { getConversation, getRawConversation, parseConversationIdFromUrl } from './client';
+import { getConversation, getNormalizedConversation, parseConversationIdFromUrl } from './client';
 import { switchToLeaf } from './branchSwitch';
 import { chatgptDom } from './dom';
 import tokensCss from './tokens.css?inline';
@@ -75,8 +75,8 @@ export const ChatGptPlatform: Platform = {
   parseConversationId: (href) => parseConversationIdFromUrl(href),
   fetchConversation: (convId) => getConversation(convId),
   async setActiveLeaf(convId, node) {
-    const raw = await getRawConversation(convId);
-    const ok = await switchToLeaf(raw, node.leafId);
+    const conv = await getNormalizedConversation(convId);
+    const ok = await switchToLeaf(conv, node.leafId);
     if (!ok) throw new Error('Could not switch to that branch in ChatGPT');
   },
   createCompletion: unsupported,

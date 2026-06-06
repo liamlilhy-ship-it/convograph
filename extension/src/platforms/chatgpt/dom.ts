@@ -31,4 +31,7 @@ export const chatgptDom: PlatformDom = {
     return editable.closest('form') ?? editable;
   },
   scrollTopMargin: 72,
+  // ChatGPT lazy-loads history (only the few most recent messages are in the
+  // DOM) and a programmatic scroll won't fetch older ones — so don't scroll-search.
+  scrollSearch: false,
 };

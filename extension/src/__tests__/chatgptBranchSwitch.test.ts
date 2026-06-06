@@ -1,34 +1,59 @@
 import { describe, expect, it } from 'vitest';
-import { pathToLeaf } from '../platforms/chatgpt/branchSwitch';
-import type { ChatGptConversation } from '../platforms/chatgpt/types';
+import { branchPlan } from '../platforms/chatgpt/branchSwitch';
+import type { NormalizedConversation, NormalizedMessage } from '../platforms/model';
 
-// A small branched tree: a1 has two user children (u2 / u2b), each leading to a
-// different leaf — the shape pathToLeaf must walk for branch switching.
-const M: NonNullable<ChatGptConversation['mapping']> = {
-  root: { parent: null, children: ['u1'], message: null },
-  u1: { parent: 'root', children: ['a1'], message: { author: { role: 'user' } } },
-  a1: { parent: 'u1', children: ['u2', 'u2b'], message: { author: { role: 'assistant' } } },
-  u2: { parent: 'a1', children: ['a2'], message: { author: { role: 'user' } } },
-  u2b: { parent: 'a1', children: ['a2b'], message: { author: { role: 'user' } } },
-  a2: { parent: 'u2', children: [], message: { author: { role: 'assistant' } } },
-  a2b: { parent: 'u2b', children: [], message: { author: { role: 'assistant' } } },
+const msg = (
+  uuid: string,
+  parent: string | null,
+  sender: 'human' | 'assistant',
+  t: number,
+): NormalizedMessage => ({
+  uuid,
+  parent_message_uuid: parent,
+  sender,
+  content: [{ type: 'text', text: uuid }],
+  created_at: new Date(t * 1000).toISOString(),
+});
+
+// u1 → (a1 | a1b regenerate sibling) ; the active branch a1 → u2 → a2.
+const conv: NormalizedConversation = {
+  uuid: 'c',
+  current_leaf_message_uuid: 'a2',
+  chat_messages: [
+    msg('u1', null, 'human', 1),
+    msg('a1', 'u1', 'assistant', 2),
+    msg('a1b', 'u1', 'assistant', 3), // newer regenerate sibling
+    msg('u2', 'a1', 'human', 4),
+    msg('a2', 'u2', 'assistant', 5),
+  ],
 };
 
-describe('pathToLeaf', () => {
-  it('returns the root→leaf chain through the chosen branch', () => {
-    expect(pathToLeaf(M, 'a2b')).toEqual(['root', 'u1', 'a1', 'u2b', 'a2b']);
-    expect(pathToLeaf(M, 'a2')).toEqual(['root', 'u1', 'a1', 'u2', 'a2']);
+describe('branchPlan (normalized-tree branch points)', () => {
+  it('plans the single selection needed to reach a regenerate sibling', () => {
+    expect(branchPlan(conv, 'a1b')).toEqual([{ parent: 'u1', siblingCount: 2, targetIdx: 1 }]);
   });
 
-  it('returns a single node when the leaf is a root', () => {
-    expect(pathToLeaf(M, 'root')).toEqual(['root']);
+  it('orders siblings oldest-first (the older answer is targetIdx 0)', () => {
+    expect(branchPlan(conv, 'a2')).toEqual([{ parent: 'u1', siblingCount: 2, targetIdx: 0 }]);
   });
 
-  it('is cycle-safe', () => {
-    const cyclic: NonNullable<ChatGptConversation['mapping']> = {
-      x: { parent: 'y', children: [], message: null },
-      y: { parent: 'x', children: [], message: null },
+  it('returns no steps for a linear path', () => {
+    const lin: NormalizedConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a',
+      chat_messages: [msg('u', null, 'human', 1), msg('a', 'u', 'assistant', 2)],
     };
-    expect(pathToLeaf(cyclic, 'x').length).toBeLessThanOrEqual(2);
+    expect(branchPlan(lin, 'a')).toEqual([]);
+  });
+
+  it('ignores nodes that are not on the path (no spurious branch)', () => {
+    // x is a separate branch off u1; targeting a2 must not include it.
+    const c2: NormalizedConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a2',
+      chat_messages: [...conv.chat_messages, msg('x', 'u1', 'assistant', 6)],
+    };
+    // u1 now has 3 children; reaching a2 selects a1 (oldest = idx 0) of 3.
+    expect(branchPlan(c2, 'a2')).toEqual([{ parent: 'u1', siblingCount: 3, targetIdx: 0 }]);
   });
 });

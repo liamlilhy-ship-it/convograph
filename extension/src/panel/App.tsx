@@ -397,7 +397,9 @@ export function App({ platform }: { platform: Platform }) {
       // this node so we replay the scroll when the user exits full-screen.
       if (fullscreenRef.current) fsJumpTargetRef.current = node;
       if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-        // Already active, or read-only platform — just scroll the chat to it.
+        // Already active, or read-only platform — just scroll the chat to it
+        // (best-effort: ChatGPT can't reach messages it hasn't loaded, but that
+        // stays silent rather than nagging — the graph preview shows the content).
         void jumpToNode(platform, convId, node);
         return;
       }

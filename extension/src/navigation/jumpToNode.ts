@@ -165,7 +165,9 @@ async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 40
   }
 
   // (b) active scroll-search: walk the container so virtualized bubbles mount.
-  const sc = platform.dom.findScroller();
+  // Skipped on platforms whose history is lazy-loaded (ChatGPT) — scrolling there
+  // can't fetch unloaded messages and only janks the chat.
+  const sc = platform.dom.scrollSearch === false ? null : platform.dom.findScroller();
   if (sc) {
     const step = Math.max(200, Math.floor(sc.clientHeight * 0.7));
     for (let y = 0; y <= sc.scrollHeight && Date.now() < deadline; y += step) {
