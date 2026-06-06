@@ -58,9 +58,22 @@ async function fetchConversationRaw(convId: string): Promise<ChatGptConversation
   return res.json() as Promise<ChatGptConversation>;
 }
 
+// Cache the last raw conversation so branch-switching can compute the path
+// without an extra round-trip (App.load() populates it via getConversation).
+let rawCache: { id: string; data: ChatGptConversation } | null = null;
+
 export async function getConversation(convId: string): Promise<NormalizedConversation> {
   const raw = await fetchConversationRaw(convId);
+  rawCache = { id: convId, data: raw };
   return adaptChatGptConversation(raw, convId);
+}
+
+/** The raw mapping/current_node, from cache when fresh (else fetched). */
+export async function getRawConversation(convId: string): Promise<ChatGptConversation> {
+  if (rawCache && rawCache.id === convId) return rawCache.data;
+  const raw = await fetchConversationRaw(convId);
+  rawCache = { id: convId, data: raw };
+  return raw;
 }
 
 export function parseConversationIdFromUrl(href: string = window.location.href): string | null {

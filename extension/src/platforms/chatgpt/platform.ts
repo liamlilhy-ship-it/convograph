@@ -1,5 +1,6 @@
 import type { Platform, ThemeName } from '../types';
-import { getConversation, parseConversationIdFromUrl } from './client';
+import { getConversation, getRawConversation, parseConversationIdFromUrl } from './client';
+import { switchToLeaf } from './branchSwitch';
 import { chatgptDom } from './dom';
 import tokensCss from './tokens.css?inline';
 
@@ -63,14 +64,21 @@ export const ChatGptPlatform: Platform = {
   siteName: 'chatgpt.com',
   hostnames: ['chatgpt.com', 'chat.openai.com'],
   assistantLabel: 'ChatGPT',
-  capabilities: { serverBranchSwitch: false, edit: false, followup: false, regenerate: false },
+  // Branch switching IS supported (via native arrows), but it's client-only —
+  // not persisted server-side. Content writes (edit/followup/regenerate) are not
+  // supported yet, so those action buttons stay hidden.
+  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: false, followup: false, regenerate: false },
   rootParentUuid: '',
   tokensCss,
   dom: chatgptDom,
 
   parseConversationId: (href) => parseConversationIdFromUrl(href),
   fetchConversation: (convId) => getConversation(convId),
-  setActiveLeaf: unsupported,
+  async setActiveLeaf(convId, node) {
+    const raw = await getRawConversation(convId);
+    const ok = await switchToLeaf(raw, node.leafId);
+    if (!ok) throw new Error('Could not switch to that branch in ChatGPT');
+  },
   createCompletion: unsupported,
   retryCompletion: unsupported,
   detectTheme,

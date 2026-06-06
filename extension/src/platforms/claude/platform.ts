@@ -57,7 +57,7 @@ export const ClaudePlatform: Platform = {
   siteName: 'claude.ai',
   hostnames: ['claude.ai'],
   assistantLabel: 'Claude',
-  capabilities: { serverBranchSwitch: true, edit: true, followup: true, regenerate: true },
+  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: true, edit: true, followup: true, regenerate: true },
   rootParentUuid: ROOT_PARENT_UUID,
   tokensCss,
   dom: claudeDom,

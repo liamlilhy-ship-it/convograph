@@ -29,9 +29,14 @@ export type RetryParams = Omit<CompletionParams, 'prompt'>;
 /** What write operations a platform supports. The app hides/disables UI for any
  *  capability that's off, so a read-only platform degrades cleanly. */
 export type PlatformCapabilities = {
-  /** Can the active branch be switched server-side (Claude: current_leaf)? When
-   *  false, clicking a node only scrolls the chat to it (no branch change). */
+  /** Can clicking a node switch the active branch (Claude: current_leaf PUT;
+   *  ChatGPT: drives the native < / > arrows)? When false, a click only scrolls. */
   serverBranchSwitch: boolean;
+  /** Does the platform persist the active branch server-side (Claude: yes — a
+   *  re-fetch reflects the switch)? When false (ChatGPT — branch selection is
+   *  client-only), the app keeps the highlight on the clicked branch locally and
+   *  the jump skips the SPA-refresh step (the DOM switch already applied). */
+  serverPersistsActiveBranch: boolean;
   edit: boolean;
   followup: boolean;
   regenerate: boolean;

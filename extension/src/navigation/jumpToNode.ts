@@ -219,7 +219,9 @@ export async function jumpToNode(
   } catch (e) {
     return { ok: false, refreshed: false, error: e instanceof Error ? e.message : String(e) };
   }
-  const refreshed = await requestRefresh();
+  // A server-persisted switch needs the SPA told to re-render; a client/DOM-driven
+  // switch (ChatGPT) has already applied itself, so there's nothing to refresh.
+  const refreshed = platform.capabilities.serverPersistsActiveBranch ? await requestRefresh() : true;
   const centered = await scrollToNode(platform, node);
   return { ok: true, refreshed, centered };
 }

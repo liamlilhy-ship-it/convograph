@@ -107,6 +107,10 @@ export function App({ platform }: { platform: Platform }) {
   // Mirror of `draft` for the DOM observer to read synchronously without
   // re-subscribing — it pauses auto-refresh while a draft is open (see below).
   const draftRef = useRef<Draft | null>(null);
+  // The leaf the user last jumped to. On platforms that don't persist branch
+  // selection server-side (ChatGPT), this overrides the re-fetched active path so
+  // the highlight follows the jump. Null = use the server's leaf (the default).
+  const selectedLeafRef = useRef<string | null>(null);
   const reqRef = useRef(0);
   const cascadeRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
@@ -245,6 +249,7 @@ export function App({ platform }: { platform: Platform }) {
       abortRef.current = null;
       setDraft(null);
       setFullscreen(false);
+      selectedLeafRef.current = null;
     }
   }, [open]);
 
@@ -293,6 +298,12 @@ export function App({ platform }: { platform: Platform }) {
     try {
       const conv = await platform.fetchConversation(convId);
       if (req !== reqRef.current) return;
+      // Keep the active path on the branch the user last jumped to when the
+      // platform doesn't persist branch selection (ChatGPT) — a re-fetch would
+      // otherwise revert the highlight to the server's (unchanged) leaf.
+      if (!platform.capabilities.serverPersistsActiveBranch && selectedLeafRef.current) {
+        conv.current_leaf_message_uuid = selectedLeafRef.current;
+      }
       const tree = buildDisplayTree(buildTree(conv));
       setConvModel(conv.model ?? null);
       setStatus({ kind: 'ready', tree, convId });
@@ -399,6 +410,11 @@ export function App({ platform }: { platform: Platform }) {
       }
       if (!result.refreshed) {
         setToast('Branch set — reload the chat to see it');
+      }
+      // Remember the jumped-to branch so the highlight follows it on platforms
+      // that don't persist the selection server-side (ChatGPT).
+      if (!platform.capabilities.serverPersistsActiveBranch) {
+        selectedLeafRef.current = node.leafId;
       }
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
