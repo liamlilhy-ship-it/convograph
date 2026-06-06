@@ -1,4 +1,4 @@
-import { ClaudeApiError } from './claudeClient';
+import { ClaudeApiError } from './client';
 
 const BASE = 'https://claude.ai/api';
 

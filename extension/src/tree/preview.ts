@@ -1,4 +1,4 @@
-import type { ApiContentBlock } from '../api/types';
+import type { ApiContentBlock } from '../platforms/model';
 import { pickTitle, pickBody, wordCountOf } from './snippet';
 import { detectKinds, type ContentKind, type MediaRefs } from './contentKinds';
 

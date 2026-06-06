@@ -5,7 +5,7 @@ import linear from './fixtures/linear.json';
 import singleEdit from './fixtures/single-edit.json';
 import regenerate from './fixtures/regenerate.json';
 import nested from './fixtures/nested.json';
-import type { ApiConversation } from '../api/types';
+import type { ApiConversation } from '../platforms/model';
 
 const build = (fixture: unknown) => buildDisplayTree(buildTree(fixture as ApiConversation));
 

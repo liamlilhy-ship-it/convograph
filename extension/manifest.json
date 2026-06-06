@@ -1,26 +1,33 @@
 {
   "manifest_version": 3,
-  "name": "Conversation Graph for Claude",
+  "name": "Conversation Graph",
   "version": "0.1.0",
-  "description": "Visualize claude.ai conversations as a tree of branches. Hover to preview, click to jump.",
+  "description": "Visualize claude.ai and ChatGPT conversations as a tree of branches. Hover to preview, click to jump.",
   "permissions": ["storage"],
-  "host_permissions": ["https://claude.ai/*"],
+  "host_permissions": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
+      "matches": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
       "js": ["src/content/index.ts"],
       "run_at": "document_idle",
       "all_frames": false
     },
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["src/content/mainWorld.ts"],
+      "js": ["src/content/mainWorld.claude.ts"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["src/content/mainWorld.chatgpt.ts"],
       "run_at": "document_idle",
       "all_frames": false,
       "world": "MAIN"
     }
   ],
   "action": {
-    "default_title": "Conversation Graph for Claude"
+    "default_title": "Conversation Graph"
   }
 }

@@ -123,6 +123,18 @@ export function ClaudeIcon(p: IconProps) {
   );
 }
 
+/** Simplified ChatGPT knot — marks an answer (assistant) node on ChatGPT. */
+export function ChatGptIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M7 2.2a2.3 2.3 0 0 1 4 1.6v4.4a2.3 2.3 0 0 1-3.45 2" />
+      <path d="M7 11.8a2.3 2.3 0 0 1-4-1.6V5.8a2.3 2.3 0 0 1 3.45-2" />
+      <path d="M2.9 5.1a2.3 2.3 0 0 1 1.15-3.05l3.8-2.2" transform="translate(0 2.2)" />
+      <line x1="7" y1="4.4" x2="7" y2="9.6" />
+    </svg>
+  );
+}
+
 /** Circular-arrow glyph — marks a regenerated (same-question) branch. */
 export function RegenIcon(p: IconProps) {
   return (

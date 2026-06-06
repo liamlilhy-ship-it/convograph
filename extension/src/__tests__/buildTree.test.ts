@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTree } from '../tree/buildTree';
 import linear from './fixtures/linear.json';
 import singleEdit from './fixtures/single-edit.json';
-import type { ApiConversation } from '../api/types';
+import type { ApiConversation } from '../platforms/model';
 
 describe('buildTree', () => {
   it('handles a linear conversation', () => {

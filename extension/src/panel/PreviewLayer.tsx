@@ -4,7 +4,8 @@ import type { ImageRef, WidgetRef, FileRef } from '../tree/contentKinds';
 import { FullPreview } from './FullPreview';
 import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
-import { UserIcon, ClaudeIcon, FileIcon, ImageIcon, AttachmentIcon } from './icons';
+import { UserIcon, FileIcon, ImageIcon, AttachmentIcon } from './icons';
+import { usePlatformUI } from './platformUI';
 
 /** A generated document (Artifacts feature) opened in its own window. Carries the
  *  full inline text so it renders without touching claude's native preview. */
@@ -141,7 +142,8 @@ function PreviewWindow({
     [key, x, y, w, h, onFocus, onGeometry],
   );
 
-  const { icon, title, body, showFontCtl } = renderParts(pv);
+  const { AssistantIcon } = usePlatformUI();
+  const { icon, title, body, showFontCtl } = renderParts(pv, AssistantIcon);
 
   return (
     <>
@@ -207,7 +209,10 @@ function PreviewWindow({
 
 /** Picks the header icon + title, the body element, and whether the A−/A+ font
  *  controls apply (text-bearing content only) for a window. */
-function renderParts(pv: OpenPreview): {
+function renderParts(
+  pv: OpenPreview,
+  AssistantIcon: (p: { size?: number }) => ReactNode,
+): {
   icon: ReactNode;
   title: string;
   body: ReactNode;
@@ -217,7 +222,7 @@ function renderParts(pv: OpenPreview): {
     case 'node': {
       const isHuman = pv.node.role === 'human';
       return {
-        icon: isHuman ? <UserIcon size={11} /> : <ClaudeIcon size={11} />,
+        icon: isHuman ? <UserIcon size={11} /> : <AssistantIcon size={11} />,
         title: pv.node.preview.title || (isHuman ? 'Question' : 'Answer'),
         body: <FullPreview node={pv.node} />,
         showFontCtl: true,

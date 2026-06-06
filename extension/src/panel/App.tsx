@@ -1,5 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { ClaudeApiError, getOrgId, getConversationTree, parseConversationIdFromUrl } from '../api/claudeClient';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
@@ -7,7 +6,9 @@ import { PreviewLayer, DEFAULT_FS, type OpenPreview, type PreviewContent, type G
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
 import { jumpToNode, requestRefresh, scrollChatToNode } from '../navigation/jumpToNode';
-import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from '../api/chatClient';
+import type { Platform } from '../platforms/types';
+import { PlatformApiError } from '../platforms/errors';
+import { PlatformUIProvider, assistantIconFor, type PlatformUI } from './platformUI';
 import type { DraftKind, FooterItem } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
 import { FullscreenIcon, ExitFullscreenIcon } from './icons';
@@ -65,24 +66,16 @@ const DEFAULT_PANEL_W = 480;
 const MIN_PANEL_W = 320;
 const MAX_PANEL_W_FRAC = 0.7; // never take more than 70% of viewport
 
-function usePagePushRight(open: boolean, width: number) {
+function usePagePushRight(platform: Platform, open: boolean, width: number) {
   useEffect(() => {
     if (!open) return;
-    const html = document.documentElement;
-    const prev = html.style.getPropertyValue('--cg-host-push');
-    const prevTransition = html.style.transition;
-    html.style.transition = 'padding-right 180ms ease';
-    html.style.paddingRight = `${width}px`;
-    html.style.boxSizing = 'border-box';
-    return () => {
-      html.style.paddingRight = '';
-      html.style.transition = prevTransition;
-      if (prev) html.style.setProperty('--cg-host-push', prev);
-    };
-  }, [open, width]);
+    // How to reserve room for the side panel is platform-specific (page layouts
+    // differ); Claude's implementation is the original document-padding behavior.
+    return platform.applySidePanelInset(width);
+  }, [platform, open, width]);
 }
 
-export function App() {
+export function App({ platform }: { platform: Platform }) {
   const [open, setOpen] = useState(false);
   // Full-screen: the panel fills the viewport instead of the right side. Same
   // capabilities, EXCEPT click-to-jump is disabled (the native chat it would
@@ -114,7 +107,6 @@ export function App() {
   // Mirror of `draft` for the DOM observer to read synchronously without
   // re-subscribing — it pauses auto-refresh while a draft is open (see below).
   const draftRef = useRef<Draft | null>(null);
-  const orgIdRef = useRef<string | null>(null);
   const reqRef = useRef(0);
   const cascadeRef = useRef(0);
   const toggleRef = useRef<HTMLButtonElement | null>(null);
@@ -127,7 +119,7 @@ export function App() {
 
   // Don't push the page in full-screen — the graph covers the whole viewport, so
   // there's no side panel to make room for (and the native chat is hidden).
-  usePagePushRight(open && !fullscreen, panelW);
+  usePagePushRight(platform, open && !fullscreen, panelW);
 
   // ---- Floating preview windows ----
   // Shared placement: reopening the same key focuses it (move to end of the stack);
@@ -274,20 +266,20 @@ export function App() {
     fsJumpTargetRef.current = null;
     if (!node) return;
     // Wait for the side panel to settle before re-aligning.
-    const id = window.setTimeout(() => void scrollChatToNode(node), 280);
+    const id = window.setTimeout(() => void scrollChatToNode(platform, node), 280);
     return () => clearTimeout(id);
-  }, [fullscreen]);
+  }, [fullscreen, platform]);
 
   // Anchor the toggle to the composer's top-right corner. Re-tracks on resize,
   // scroll, layout shifts, and on panel open/close (because the composer moves
   // when claude.ai's content shifts left).
   useEffect(() => {
     if (!toggleRef.current) return;
-    return trackComposerAnchor(toggleRef.current, setAnchor);
-  }, [open, panelW]);
+    return trackComposerAnchor(platform, toggleRef.current, setAnchor);
+  }, [open, panelW, platform]);
 
   const load = useCallback(async () => {
-    const convId = parseConversationIdFromUrl();
+    const convId = platform.parseConversationId();
     if (!convId) {
       setStatus({ kind: 'no-conversation' });
       return;
@@ -299,8 +291,7 @@ export function App() {
     // chat's nodes while the new one fetches.
     setStatus((s) => (s.kind === 'ready' && s.convId === convId ? s : { kind: 'loading' }));
     try {
-      if (!orgIdRef.current) orgIdRef.current = await getOrgId();
-      const conv = await getConversationTree(orgIdRef.current, convId);
+      const conv = await platform.fetchConversation(convId);
       if (req !== reqRef.current) return;
       const tree = buildDisplayTree(buildTree(conv));
       setConvModel(conv.model ?? null);
@@ -321,26 +312,26 @@ export function App() {
       }
     } catch (e) {
       if (req !== reqRef.current) return;
-      const msg = e instanceof ClaudeApiError
+      const msg = e instanceof PlatformApiError
         ? e.status === 403 || e.status === 401
-          ? 'Not authenticated to claude.ai. Reload the tab and sign in.'
-          : `claude.ai API error: ${e.status}`
+          ? `Not authenticated to ${platform.siteName}. Reload the tab and sign in.`
+          : `${platform.siteName} API error: ${e.status}`
         : e instanceof Error
           ? e.message
           : 'Unknown error loading conversation';
       setStatus({ kind: 'error', message: msg });
     }
-  }, []);
+  }, [platform]);
 
   useEffect(() => {
     if (!open) return;
     // Capture the conv we opened against — switching to a different chat closes
     // the panel (Option 1 by user request). Query-string-only changes on the
     // same conv are ignored.
-    const initialConvId = parseConversationIdFromUrl();
+    const initialConvId = platform.parseConversationId();
     void load();
     const unwatchUrl = watchUrl(() => {
-      const cur = parseConversationIdFromUrl();
+      const cur = platform.parseConversationId();
       if (cur !== initialConvId) {
         setOpen(false);
       }
@@ -389,19 +380,18 @@ export function App() {
       // Click-to-jump works in full-screen too: it switches the active branch
       // (updating the graph's active-path highlight) and leaves the native chat
       // — hidden behind the graph — scrolled to that branch for when you exit.
-      const convId = parseConversationIdFromUrl();
-      const orgId = orgIdRef.current;
-      if (!convId || !orgId) return;
+      const convId = platform.parseConversationId();
+      if (!convId) return;
       // In full-screen the chat is hidden, so its scroll won't stick — remember
       // this node so we replay the scroll when the user exits full-screen.
       if (fullscreenRef.current) fsJumpTargetRef.current = node;
-      if (node.isOnActivePath) {
-        // Already active — just scroll the left chat to it.
-        void jumpToNode(orgId, convId, node);
+      if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
+        // Already active, or read-only platform — just scroll the chat to it.
+        void jumpToNode(platform, convId, node);
         return;
       }
       setJumping(node.id);
-      const result = await jumpToNode(orgId, convId, node);
+      const result = await jumpToNode(platform, convId, node);
       setJumping(null);
       if (!result.ok) {
         setToast(result.error ?? 'Could not switch branch');
@@ -413,7 +403,7 @@ export function App() {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load],
+    [load, platform],
   );
 
   // ---- Quick actions via a floating draft node ----
@@ -424,9 +414,8 @@ export function App() {
   // real branch is present before the placeholder disappears.
   const runCompletion = useCallback(
     async (d: Draft, prompt: string) => {
-      const convId = parseConversationIdFromUrl();
-      const orgId = orgIdRef.current;
-      if (!convId || !orgId) {
+      const convId = platform.parseConversationId();
+      if (!convId) {
         setToast('No active conversation');
         setDraft(null);
         return;
@@ -460,9 +449,9 @@ export function App() {
       };
       try {
         if (d.isRetry) {
-          await retryCompletion({ orgId, convId, parentMessageUuid: d.parentMessageUuid, signal: controller.signal, onDelta, onStart });
+          await platform.retryCompletion({ convId, parentMessageUuid: d.parentMessageUuid, signal: controller.signal, onDelta, onStart });
         } else {
-          await createCompletion({ orgId, convId, parentMessageUuid: d.parentMessageUuid, prompt, signal: controller.signal, onDelta, onStart });
+          await platform.createCompletion({ convId, parentMessageUuid: d.parentMessageUuid, prompt, signal: controller.signal, onDelta, onStart });
         }
         await requestRefresh();
         await load();
@@ -476,7 +465,7 @@ export function App() {
         setDraft(null);
       }
     },
-    [load],
+    [load, platform],
   );
 
   // Open an editable draft (no-op if one is already open — the buttons are locked,
@@ -486,7 +475,7 @@ export function App() {
       cur ?? {
         kind: 'edit',
         parentDisplayId: node.parentId,
-        parentMessageUuid: node.questionParentId ?? ROOT_PARENT_UUID,
+        parentMessageUuid: node.questionParentId ?? platform.rootParentUuid,
         isRetry: false,
         title: node.fullText,
         editable: true,
@@ -494,7 +483,7 @@ export function App() {
         model: convModel,
       },
     );
-  }, [convModel]);
+  }, [convModel, platform]);
   const startFollowup = useCallback((node: DisplayNode) => {
     if (!node.assistantId) return;
     const parentMessageUuid = node.assistantId;
@@ -575,6 +564,20 @@ export function App() {
     window.addEventListener('mouseup', onUp);
   }, [panelW]);
 
+  // Presentation slice for the active platform (assistant label/icon + whether to
+  // show write-action buttons). Consumed via context by the node/preview cards.
+  const platformUI: PlatformUI = useMemo(
+    () => ({
+      assistantLabel: platform.assistantLabel,
+      AssistantIcon: assistantIconFor(platform.id),
+      showActions:
+        platform.capabilities.edit ||
+        platform.capabilities.followup ||
+        platform.capabilities.regenerate,
+    }),
+    [platform],
+  );
+
   // Style the toggle from anchor coords
   const toggleStyle: React.CSSProperties = anchor
     ? {
@@ -585,7 +588,7 @@ export function App() {
     : { ['--cg-toggle-vis' as never]: 'hidden' };
 
   return (
-    <>
+    <PlatformUIProvider value={platformUI}>
       <button
         ref={toggleRef}
         className="cg-toggle"
@@ -672,7 +675,7 @@ export function App() {
               {status.kind === 'loading'
                 ? 'Loading conversation tree…'
                 : status.kind === 'no-conversation'
-                  ? 'Open any chat on claude.ai, then press ⌘⇧G.'
+                  ? `Open any chat on ${platform.siteName}, then press ⌘⇧G.`
                   : status.kind === 'error'
                     ? status.message
                     : ''}
@@ -691,6 +694,6 @@ export function App() {
           onGeometry={setPreviewGeometry}
         />
       )}
-    </>
+    </PlatformUIProvider>
   );
 }

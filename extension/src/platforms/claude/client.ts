@@ -1,10 +1,14 @@
-import type { ApiConversation, ApiOrganization } from './types';
+import type { ApiConversation } from '../model';
+import { PlatformApiError } from '../errors';
 
 const BASE = 'https://claude.ai/api';
 
-class ClaudeApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
+/** claude.ai's `/organizations` entries. Only the id is used. */
+type ApiOrganization = { uuid: string; name?: string };
+
+class ClaudeApiError extends PlatformApiError {
+  constructor(status: number, message: string) {
+    super(status, message);
     this.name = 'ClaudeApiError';
   }
 }

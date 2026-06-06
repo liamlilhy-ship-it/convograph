@@ -11,7 +11,6 @@ import {
   LinkIcon,
   FileIcon,
   UserIcon,
-  ClaudeIcon,
   RegenIcon,
   ExpandIcon,
   WindowIcon,
@@ -19,6 +18,7 @@ import {
   FollowUpIcon,
   SendIcon,
 } from './icons';
+import { usePlatformUI } from './platformUI';
 import { type PreviewItem } from './HoverPreview';
 import { FullPreview } from './FullPreview';
 import { svgDataUri } from './widgetRender';
@@ -103,6 +103,7 @@ export function NodeCard({
   onRegenerate,
   style,
 }: NodeCardProps) {
+  const { assistantLabel, AssistantIcon, showActions } = usePlatformUI();
   const isHuman = node.role === 'human';
   const p = node.preview;
   const text = isHuman ? p.title : p.body || p.title;
@@ -140,8 +141,8 @@ export function NodeCard({
         title={isPreview ? 'Jump to this message' : undefined}
       >
         <span className="cg-role">
-          {isHuman ? <UserIcon size={12} /> : <ClaudeIcon size={12} />}
-          {isHuman ? 'You' : 'Claude'}
+          {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
+          {isHuman ? 'You' : assistantLabel}
         </span>
         {branch === 'regenerate' && (
           <span className="cg-tag-regen" title="Regenerated answer (same question)">
@@ -155,57 +156,58 @@ export function NodeCard({
           </span>
         )}
         <div className="cg-head-actions">
-          {isHuman ? (
-            <>
-              <button
-                type="button"
-                className="cg-pv-btn"
-                // aria-disabled (not `disabled`) keeps the element hoverable so the
-                // tooltip explaining the lock still shows; the click is guarded below.
-                aria-disabled={locked || undefined}
-                data-tip={locked ? lockReason : 'Edit question'}
-                aria-label="Edit question"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (locked) return;
-                  onStartEdit(node);
-                }}
-              >
-                <EditIcon size={12} />
-              </button>
-              {canRegenerate && (
+          {showActions &&
+            (isHuman ? (
+              <>
                 <button
                   type="button"
                   className="cg-pv-btn"
+                  // aria-disabled (not `disabled`) keeps the element hoverable so the
+                  // tooltip explaining the lock still shows; the click is guarded below.
                   aria-disabled={locked || undefined}
-                  data-tip={locked ? lockReason : 'Regenerate answer'}
-                  aria-label="Regenerate answer"
+                  data-tip={locked ? lockReason : 'Edit question'}
+                  aria-label="Edit question"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (locked) return;
-                    onRegenerate(node);
+                    onStartEdit(node);
                   }}
                 >
-                  <RegenIcon size={12} />
+                  <EditIcon size={12} />
                 </button>
-              )}
-            </>
-          ) : (
-            <button
-              type="button"
-              className="cg-pv-btn"
-              aria-disabled={locked || undefined}
-              data-tip={locked ? lockReason : 'Ask follow-up'}
-              aria-label="Ask follow-up"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (locked) return;
-                onStartFollowup(node);
-              }}
-            >
-              <FollowUpIcon size={12} />
-            </button>
-          )}
+                {canRegenerate && (
+                  <button
+                    type="button"
+                    className="cg-pv-btn"
+                    aria-disabled={locked || undefined}
+                    data-tip={locked ? lockReason : 'Regenerate answer'}
+                    aria-label="Regenerate answer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (locked) return;
+                      onRegenerate(node);
+                    }}
+                  >
+                    <RegenIcon size={12} />
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                type="button"
+                className="cg-pv-btn"
+                aria-disabled={locked || undefined}
+                data-tip={locked ? lockReason : 'Ask follow-up'}
+                aria-label="Ask follow-up"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (locked) return;
+                  onStartFollowup(node);
+                }}
+              >
+                <FollowUpIcon size={12} />
+              </button>
+            ))}
           <button
             type="button"
             className="cg-pv-btn"
@@ -344,6 +346,7 @@ export function DraftAnswerCard({
   style?: CSSProperties;
   onCancel: () => void;
 }) {
+  const { assistantLabel, AssistantIcon } = usePlatformUI();
   // Match the in-place preview's fixed reader font.
   const cardStyle: CSSProperties = { ...style, ['--cg-pv-fs' as never]: `${INLINE_PREVIEW_FS}px` };
   return (
@@ -357,8 +360,8 @@ export function DraftAnswerCard({
     >
       <div className="cg-head">
         <span className="cg-role">
-          <ClaudeIcon size={12} />
-          Claude
+          <AssistantIcon size={12} />
+          {assistantLabel}
         </span>
         <span className="cg-busy">Generating…</span>
         {model && (
@@ -387,6 +390,7 @@ export function DraftAnswerCard({
  * read earlier content, their position is left alone as more text streams in.
  */
 function StreamingReader({ text }: { text?: string }) {
+  const { assistantLabel } = usePlatformUI();
   const ref = useRef<HTMLDivElement>(null);
   // Whether to keep pinning to the bottom as content grows. Flipped off when the
   // user scrolls away from the bottom, back on when they return to it.
@@ -409,7 +413,7 @@ function StreamingReader({ text }: { text?: string }) {
         </div>
       ) : (
         <div className="cg-pv-content">
-          <span className="cg-muted">Claude is responding…</span>
+          <span className="cg-muted">{assistantLabel} is responding…</span>
         </div>
       )}
     </div>

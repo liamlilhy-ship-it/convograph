@@ -1,4 +1,4 @@
-import { findComposer } from './observers';
+import type { Platform } from '../platforms/types';
 
 export type AnchorPosition = { x: number; y: number; visible: boolean };
 
@@ -11,11 +11,15 @@ export type AnchorOpts = {
 
 /**
  * Computes the on-screen position for an absolutely-positioned pill that should
- * sit just above the top-right corner of claude.ai's composer. Returns null when
- * the composer cannot be found.
+ * sit just above the top-right corner of the platform's composer. Returns null
+ * when the composer cannot be found.
  */
-export function computeAnchor(toggleEl: HTMLElement, opts: AnchorOpts = {}): AnchorPosition | null {
-  const composer = findComposer();
+export function computeAnchor(
+  platform: Platform,
+  toggleEl: HTMLElement,
+  opts: AnchorOpts = {},
+): AnchorPosition | null {
+  const composer = platform.dom.findComposer();
   if (!composer) return null;
   const rect = composer.getBoundingClientRect();
   const togW = toggleEl.offsetWidth || 90;
@@ -34,6 +38,7 @@ export function computeAnchor(toggleEl: HTMLElement, opts: AnchorOpts = {}): Anc
  * it moves (scroll, resize, layout shifts, claude.ai content reflow, etc).
  */
 export function trackComposerAnchor(
+  platform: Platform,
   toggleEl: HTMLElement,
   onUpdate: (pos: AnchorPosition | null) => void,
   opts: AnchorOpts = {},
@@ -41,7 +46,7 @@ export function trackComposerAnchor(
   let raf = 0;
   const tick = () => {
     raf = 0;
-    onUpdate(computeAnchor(toggleEl, opts));
+    onUpdate(computeAnchor(platform, toggleEl, opts));
   };
   const schedule = () => {
     if (raf) return;

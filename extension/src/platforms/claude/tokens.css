@@ -12,6 +12,11 @@
   --cg-node-q-bg: #fbf2ec;
   --cg-node-a-bg: #ffffff;
   --cg-shadow: 0 6px 24px rgba(31, 30, 29, 0.10);
+  /* Shadows tied to the brand ink color + text-on-accent. Defined once here so
+     they cascade to the dark theme too (they were theme-independent literals). */
+  --cg-shadow-hover: 0 10px 28px rgba(31, 30, 29, 0.14);
+  --cg-shadow-float: 0 16px 48px rgba(31, 30, 29, 0.22);
+  --cg-on-accent: #fff;
   --cg-minimap-mask: rgba(31, 30, 29, 0.08);
   --cg-minimap-node: #b9b6ad;
   --cg-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

@@ -4,7 +4,8 @@ import type { ContentKind, ImageRef, ArtifactRef, FileRef } from '../tree/conten
 import type { NodePreview } from '../tree/preview';
 import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
-import { UserIcon, ClaudeIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
+import { UserIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
+import { usePlatformUI } from './platformUI';
 
 /** Typed lookup for the (at most one) kind of a given tag in a preview. */
 function kindOf<K extends ContentKind['kind']>(
@@ -22,6 +23,7 @@ function kindOf<K extends ContentKind['kind']>(
  * selectable DOM (copy-pasteable).
  */
 export function FullPreview({ node }: { node: DisplayNode }) {
+  const { assistantLabel, AssistantIcon } = usePlatformUI();
   const isHuman = node.role === 'human';
   const p = node.preview;
 
@@ -44,8 +46,8 @@ export function FullPreview({ node }: { node: DisplayNode }) {
   return (
     <div className="cg-pv-content">
       <div className="cg-pv-role">
-        {isHuman ? <UserIcon size={12} /> : <ClaudeIcon size={12} />}
-        {isHuman ? 'You' : 'Claude'}
+        {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
+        {isHuman ? 'You' : assistantLabel}
       </div>
 
       {/* On an answer, show its originating question for context. */}

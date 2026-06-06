@@ -193,7 +193,7 @@
 .cg-node:hover {
   border-color: var(--cg-accent);
   transform: translateY(-1px);
-  box-shadow: 0 10px 28px rgba(31, 30, 29, 0.14);
+  box-shadow: var(--cg-shadow-hover);
 }
 .cg-node[data-active="true"] {
   border-color: var(--cg-accent);
@@ -917,7 +917,7 @@
 .cg-node .cg-editor-send {
   border-color: var(--cg-accent);
   background: var(--cg-accent);
-  color: #fff;
+  color: var(--cg-on-accent);
 }
 .cg-node .cg-editor-send:hover:not(:disabled) { filter: brightness(1.05); }
 .cg-node .cg-editor-btn:disabled { opacity: 0.45; cursor: default; }
@@ -953,7 +953,7 @@
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border-strong);
   border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(31, 30, 29, 0.22);
+  box-shadow: var(--cg-shadow-float);
   overflow: hidden;
   pointer-events: auto;
 }

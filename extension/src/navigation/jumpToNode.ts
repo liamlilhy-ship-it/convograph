@@ -1,22 +1,19 @@
-import { setCurrentLeaf } from '../api/claudeClient';
 import type { DisplayNode } from '../tree/displayTree';
+import type { Platform } from '../platforms/types';
 
 /**
- * Jumps the underlying claude.ai chat to the branch a graph node belongs to.
+ * Jumps the underlying chat to the branch a graph node belongs to.
  *
- * Mechanism (confirmed via spike, see memory claude-ai-branch-switch-api):
- *   1. PUT the node's leaf message uuid to .../current_leaf_message_uuid.
- *   2. Ask the MAIN-world bridge to invalidate the React Query cache so the
- *      chat re-renders to the new branch (a bare PUT doesn't refresh the UI).
+ * Mechanism (Claude; confirmed via spike, see memory claude-ai-branch-switch-api):
+ *   1. Switch the active branch server-side (platform.setActiveLeaf).
+ *   2. Ask the MAIN-world bridge to re-render the chat to the new branch (a bare
+ *      branch-switch doesn't refresh the UI).
  *   3. Locate the node's question bubble and scroll it to the top.
  *
- * The target leaf is `node.leafId` — a concrete descendant message with no
- * children. The node's own message id cannot be used: the API rejects a leaf
- * that still has children ("Current leaf message has unexpected children").
+ * The selectors, the top margin, and the branch-switch itself all come from the
+ * active `Platform`, so the algorithm here is platform-agnostic. Platforms with
+ * no server-side branch switch degrade to step 3 (scroll only).
  */
-export function leafUuidOf(node: DisplayNode): string {
-  return node.leafId;
-}
 
 const REFRESH_REQUEST = 'cg-refresh-conversation';
 const REFRESH_DONE = 'cg-refresh-conversation-done';
@@ -92,10 +89,6 @@ export function matchKey(strippedQuestion: string): string {
   return strippedQuestion.slice(KEY_SKIP, KEY_SKIP + KEY_LEN);
 }
 
-function findScroller(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-autoscroll-container]');
-}
-
 /** Drops all whitespace so containment ignores it (see bubbleMatches). */
 const collapse = (s: string): string => s.replace(/\s+/g, '');
 
@@ -117,28 +110,23 @@ export function bubbleMatches(bubbleText: string, key: string): boolean {
 }
 
 /** Finds the rendered question bubble matching `key` among mounted bubbles. */
-function findBubble(key: string): HTMLElement | null {
+function findBubble(platform: Platform, key: string): HTMLElement | null {
   if (!collapse(key)) return null;
-  const bubbles = Array.from(document.querySelectorAll<HTMLElement>('[data-user-message-bubble]'));
+  const bubbles = platform.dom.findQuestionBubbles();
   return bubbles.find((b) => bubbleMatches(b.textContent ?? '', key)) ?? null;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Gap left above the question bubble once it lands at the top of the scroller.
- *  Generous enough to clear claude.ai's sticky header so the bubble never lands
- *  flush against (or tucked under) the top edge. */
-const TOP_MARGIN = 56;
-
 /**
  * Scrolls `el` to the TOP of the scroll container by adjusting scrollTop directly
- * (leaving a small margin above it). `scrollIntoView({behavior:'smooth'})` is
- * unreliable here — claude.ai's autoscroll container interrupts it, leaving the
- * target hundreds of px off (observed live). Manual scrollTop math lands exactly,
- * and a second pass absorbs any reflow nudge.
+ * (leaving `platform.dom.scrollTopMargin` above it to clear the sticky header).
+ * `scrollIntoView({behavior:'smooth'})` is unreliable here — the page's autoscroll
+ * container interrupts it, leaving the target hundreds of px off (observed live).
+ * Manual scrollTop math lands exactly, and a second pass absorbs any reflow nudge.
  */
-async function alignToTop(el: HTMLElement): Promise<void> {
-  const sc = findScroller();
+async function alignToTop(platform: Platform, el: HTMLElement): Promise<void> {
+  const sc = platform.dom.findScroller();
   if (!sc) {
     el.scrollIntoView({ block: 'start' });
     return;
@@ -146,7 +134,7 @@ async function alignToTop(el: HTMLElement): Promise<void> {
   for (let i = 0; i < 2; i++) {
     const r = el.getBoundingClientRect();
     const cr = sc.getBoundingClientRect();
-    sc.scrollTop += r.top - cr.top - TOP_MARGIN;
+    sc.scrollTop += r.top - cr.top - platform.dom.scrollTopMargin;
     await sleep(120);
   }
 }
@@ -159,7 +147,7 @@ async function alignToTop(el: HTMLElement): Promise<void> {
  * Bounded by a time budget so it can never hang. Best effort: if never found,
  * the chat is already on the right branch and the user scrolls manually.
  */
-async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean> {
+async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 4000): Promise<boolean> {
   // `questionText` is the turn's human message for BOTH the question node and
   // its answer node — so clicking an answer still scrolls to the question bubble.
   const key = matchKey(stripMarkdown(node.questionText));
@@ -168,32 +156,32 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
 
   // (a) poll in place while the re-render settles.
   for (let i = 0; i < 8 && Date.now() < deadline; i++) {
-    const el = findBubble(key);
+    const el = findBubble(platform, key);
     if (el) {
-      await alignToTop(el);
+      await alignToTop(platform, el);
       return true;
     }
     await sleep(150);
   }
 
   // (b) active scroll-search: walk the container so virtualized bubbles mount.
-  const sc = findScroller();
+  const sc = platform.dom.findScroller();
   if (sc) {
     const step = Math.max(200, Math.floor(sc.clientHeight * 0.7));
     for (let y = 0; y <= sc.scrollHeight && Date.now() < deadline; y += step) {
       sc.scrollTop = y;
       await sleep(120);
-      const el = findBubble(key);
+      const el = findBubble(platform, key);
       if (el) {
-        await alignToTop(el);
+        await alignToTop(platform, el);
         return true;
       }
     }
   }
 
-  const el = findBubble(key);
+  const el = findBubble(platform, key);
   if (el) {
-    await alignToTop(el);
+    await alignToTop(platform, el);
     return true;
   }
   return false;
@@ -205,32 +193,33 @@ async function scrollToNode(node: DisplayNode, budgetMs = 4000): Promise<boolean
  * during a full-screen jump happens while the chat is hidden behind the graph and
  * doesn't stick, so we replay it once the chat is visible again.
  */
-export function scrollChatToNode(node: DisplayNode): Promise<boolean> {
-  return scrollToNode(node);
+export function scrollChatToNode(platform: Platform, node: DisplayNode): Promise<boolean> {
+  return scrollToNode(platform, node);
 }
 
 export type JumpResult = { ok: boolean; refreshed: boolean; centered?: boolean; error?: string };
 
 /**
  * Switches the active branch and scrolls the node to the top. Throws nothing — returns a
- * result the caller can surface as a toast.
+ * result the caller can surface as a toast. On a platform with no server-side
+ * branch switch (or a node already on the active path), it scrolls only.
  */
 export async function jumpToNode(
-  orgId: string,
+  platform: Platform,
   convId: string,
   node: DisplayNode,
 ): Promise<JumpResult> {
-  // Already the active branch? Just scroll to it.
-  if (node.isOnActivePath) {
-    const centered = await scrollToNode(node);
+  // Already the active branch, or no server-side switch available? Just scroll.
+  if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
+    const centered = await scrollToNode(platform, node);
     return { ok: true, refreshed: false, centered };
   }
   try {
-    await setCurrentLeaf(orgId, convId, leafUuidOf(node));
+    await platform.setActiveLeaf(convId, node);
   } catch (e) {
     return { ok: false, refreshed: false, error: e instanceof Error ? e.message : String(e) };
   }
   const refreshed = await requestRefresh();
-  const centered = await scrollToNode(node);
+  const centered = await scrollToNode(platform, node);
   return { ok: true, refreshed, centered };
 }

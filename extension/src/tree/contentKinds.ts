@@ -1,4 +1,4 @@
-import type { ApiContentBlock } from '../api/types';
+import type { ApiContentBlock } from '../platforms/model';
 
 export type LinkItem = { text: string; url: string };
 

@@ -30,31 +30,6 @@ export function watchUrl(onChange: Listener): () => void {
   };
 }
 
-export function findComposer(): HTMLElement | null {
-  const editable = document.querySelector<HTMLElement>(
-    'div[contenteditable="true"][role="textbox"], textarea[role="textbox"]',
-  );
-  if (!editable) return null;
-  return editable.closest('form, fieldset, div[class*="composer"]') ?? editable;
-}
-
-export function watchComposer(onFound: (el: HTMLElement) => void): () => void {
-  let current: HTMLElement | null = null;
-  const check = () => {
-    const found = findComposer();
-    if (found && found !== current) {
-      current = found;
-      onFound(found);
-    } else if (!found && current) {
-      current = null;
-    }
-  };
-  check();
-  const mo = new MutationObserver(check);
-  mo.observe(document.body, { childList: true, subtree: true });
-  return () => mo.disconnect();
-}
-
 export function watchConversation(onChange: Listener, debounceMs = 600): () => void {
   let timer: number | null = null;
   const tick = () => {

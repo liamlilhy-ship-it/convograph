@@ -12,6 +12,8 @@
  *                      →  dispatch `cg-refresh-conversation-done` { ok }
  */
 
+export {}; // module scope (isolates the constants below from other bridges)
+
 const REQUEST = 'cg-refresh-conversation';
 const DONE = 'cg-refresh-conversation-done';
 

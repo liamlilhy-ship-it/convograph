@@ -1,4 +1,4 @@
-import type { ApiConversation, ApiMessage } from '../api/types';
+import type { ApiConversation, ApiMessage } from '../platforms/model';
 import { computeNodePreview, type NodePreview } from './preview';
 import type { ImageRef, FileRef, WidgetRef, ArtifactRef, MediaRefs, PreviewBlock } from './contentKinds';
 
