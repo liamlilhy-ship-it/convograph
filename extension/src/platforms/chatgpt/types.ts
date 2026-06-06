@@ -6,6 +6,9 @@ export type ChatGptMessage = {
   author?: { role?: string };
   create_time?: number | null;
   content?: { content_type?: string; parts?: unknown[]; text?: string };
+  /** Who the message is addressed to: 'all' = user-facing; a tool name
+   *  (e.g. 'web.run', 'python') = a tool call, which the adapter drops. */
+  recipient?: string;
   metadata?: {
     model_slug?: string;
     /** Hidden system/tool/reasoning nodes set this; the adapter drops them. */

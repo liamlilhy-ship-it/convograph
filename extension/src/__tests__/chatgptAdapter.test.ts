@@ -109,3 +109,44 @@ describe('adaptChatGptConversation', () => {
     expect(display.activePath.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A linear chat where the assistant turns are multi-message (commentary preamble +
+ * web.run tool calls + final answer) — the shape that previously rendered as a
+ * fake N-way branch. It must collapse to ONE assistant node per turn.
+ */
+const toolTurns: ChatGptConversation = {
+  conversation_id: 'conv-2',
+  current_node: 'f2',
+  mapping: {
+    root: { id: 'root', parent: null, children: ['u1'], message: null },
+    u1: { id: 'u1', parent: 'root', children: ['c1'], message: { author: { role: 'user' }, create_time: 1, recipient: 'all', content: { content_type: 'text', parts: ['Plan a trip'] } } },
+    c1: { id: 'c1', parent: 'u1', children: ['t1'], message: { author: { role: 'assistant' }, create_time: 2, recipient: 'all', content: { content_type: 'text', parts: ["I'll research this."] } } },
+    t1: { id: 't1', parent: 'c1', children: ['f1'], message: { author: { role: 'assistant' }, create_time: 3, recipient: 'web.run', content: { content_type: 'code', parts: ['{"search":"flights"}'] } } },
+    f1: { id: 'f1', parent: 't1', children: ['u2'], message: { author: { role: 'assistant' }, create_time: 4, recipient: 'all', content: { content_type: 'text', parts: ['Here is the plan.'] } } },
+    u2: { id: 'u2', parent: 'f1', children: ['f2'], message: { author: { role: 'user' }, create_time: 5, recipient: 'all', content: { content_type: 'text', parts: ['Refine it'] } } },
+    f2: { id: 'f2', parent: 'u2', children: [], message: { author: { role: 'assistant' }, create_time: 6, recipient: 'all', content: { content_type: 'text', parts: ['Refined plan.'] } } },
+  },
+};
+
+describe('adapter collapses multi-message assistant turns', () => {
+  const conv = adaptChatGptConversation(toolTurns, 'conv-2');
+
+  it('drops tool calls and merges commentary+answer into one assistant node', () => {
+    const ids = conv.chat_messages.map((m) => m.uuid).sort();
+    expect(ids).toEqual(['c1', 'f2', 'u1', 'u2']); // t1 (web.run) dropped; c1 represents the merged turn
+    const byId = new Map(conv.chat_messages.map((m) => [m.uuid, m]));
+    expect(byId.get('c1')!.content[0]!.text).toContain("I'll research this.");
+    expect(byId.get('c1')!.content[0]!.text).toContain('Here is the plan.');
+    expect(byId.get('u2')!.parent_message_uuid).toBe('c1'); // user2 follows the merged turn
+  });
+
+  it('produces ONE linear thread — no spurious branches', () => {
+    const built = buildTree(conv);
+    expect(built.roots.map((r) => r.id)).toEqual(['u1']);
+    expect(built.activePath).toEqual(['u1', 'c1', 'u2', 'f2']);
+    const display = buildDisplayTree(built);
+    // Every turn is a single, unbranched pair (siblingCount 1).
+    expect(display.orderedNodes.every((n) => n.siblingCount === 1)).toBe(true);
+  });
+});

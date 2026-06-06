@@ -5,14 +5,19 @@ import type { ChatGptConversation, ChatGptMessage } from './types';
  * Folds ChatGPT's `mapping`/`current_node` graph into the neutral
  * `NormalizedConversation` the generic core consumes.
  *
- * ChatGPT's tree has wrapper nodes the core doesn't want: a synthetic root
- * (message === null), a hidden system prompt, and tool/reasoning nodes
- * (`is_visually_hidden_from_conversation` or empty text). We keep only visible
- * user/assistant messages and re-parent each to its nearest VISIBLE ancestor of
- * the OPPOSITE role. That single rule guarantees the strict human→assistant
- * alternation `displayTree` relies on (its turn-pairing assumes H→A→H→A), while
- * preserving every edit/regenerate branch ChatGPT recorded.
+ * ChatGPT's tree carries far more than the visible chat: a synthetic root, hidden
+ * system prompts, per-turn `thoughts`/`reasoning_recap` (empty), and — crucially —
+ * multiple messages PER assistant turn (a `commentary` preamble, several `web.run`
+ * tool calls, then the `final` answer). We keep only USER-FACING messages
+ * (`recipient: 'all'` + a text content type) and then COLLAPSE consecutive
+ * same-role messages into a single turn. Without the collapse, a multi-message
+ * assistant turn would reparent each message to the same user node and render as a
+ * fake N-way branch (the bug this fixes). The collapse also yields the strict
+ * human→assistant alternation `displayTree` requires.
  */
+
+/** Content types that carry the user-visible answer (vs tool calls / reasoning). */
+const VISIBLE_CONTENT = new Set(['text', 'multimodal_text']);
 
 function extractText(m?: ChatGptMessage | null): string {
   const c = m?.content;
@@ -32,6 +37,8 @@ type Info = {
   create: number;
   model?: string;
   hidden: boolean;
+  ctype: string;
+  recipient: string;
 };
 
 export function adaptChatGptConversation(
@@ -50,67 +57,86 @@ export function adaptChatGptConversation(
       create: typeof m?.create_time === 'number' ? m.create_time : 0,
       model: typeof m?.metadata?.model_slug === 'string' ? m.metadata.model_slug : undefined,
       hidden: m?.metadata?.is_visually_hidden_from_conversation === true,
+      ctype: m?.content?.content_type ?? '',
+      recipient: m?.recipient ?? 'all',
     });
   }
 
-  const visible = (n?: Info): n is Info =>
-    !!n && !n.hidden && (n.role === 'user' || n.role === 'assistant') && n.text.trim() !== '';
+  // A user-facing message: not hidden, a user/assistant turn, addressed to the
+  // user (not a tool), with text content (drops tool calls / thoughts / recaps).
+  const visible = (n?: Info): boolean =>
+    !!n &&
+    !n.hidden &&
+    (n.role === 'user' || n.role === 'assistant') &&
+    n.recipient === 'all' &&
+    VISIBLE_CONTENT.has(n.ctype) &&
+    n.text.trim() !== '';
 
-  // Nearest visible ancestor of the OPPOSITE role → enforces strict alternation.
-  const parentOf = (id: string, role: string): string | null => {
+  // Nearest visible ancestor of any role.
+  const nva = (id: string): Info | null => {
     let p = info.get(id)?.parent ?? null;
     while (p) {
       const pn = info.get(p);
-      if (visible(pn) && pn.role !== role) return p;
+      if (visible(pn)) return pn!;
       p = pn?.parent ?? null;
     }
     return null;
   };
 
-  // Nearest visible ancestor of ANY role (for resolving current_node → a leaf the
-  // core will recognise).
-  const nearestVisible = (id: string | null): string | null => {
-    let cur = id;
-    while (cur) {
-      const node = info.get(cur);
-      const parent = node?.parent ?? null; // read before the guard narrows `node`
-      if (visible(node)) return cur;
-      cur = parent;
-    }
-    return null;
+  // The "turn representative" of a visible node = the TOPMOST node of its
+  // maximal same-role run (a multi-message turn collapses to its first message).
+  const repCache = new Map<string, Info>();
+  const turnRep = (n: Info): Info => {
+    const cached = repCache.get(n.id);
+    if (cached) return cached;
+    const anc = nva(n.id);
+    const rep = anc && anc.role === n.role ? turnRep(anc) : n;
+    repCache.set(n.id, rep);
+    return rep;
   };
 
-  const chat_messages: NormalizedMessage[] = [];
+  // Group every visible node under its turn representative.
+  const turns = new Map<string, Info[]>();
   for (const n of info.values()) {
     if (!visible(n)) continue;
+    const repId = turnRep(n).id;
+    (turns.get(repId) ?? turns.set(repId, []).get(repId)!).push(n);
+  }
+
+  const chat_messages: NormalizedMessage[] = [];
+  for (const [repId, members] of turns) {
+    members.sort((a, b) => a.create - b.create);
+    const rep = info.get(repId)!;
+    const ancestor = nva(rep.id); // a turn start → ancestor is opposite-role or null
     chat_messages.push({
-      uuid: n.id,
-      parent_message_uuid: parentOf(n.id, n.role),
-      sender: n.role === 'user' ? 'human' : 'assistant',
-      content: [{ type: 'text', text: n.text }],
-      created_at: new Date((n.create || 0) * 1000).toISOString(),
+      uuid: rep.id,
+      parent_message_uuid: ancestor ? turnRep(ancestor).id : null,
+      sender: rep.role === 'user' ? 'human' : 'assistant',
+      content: [{ type: 'text', text: members.map((m) => m.text).join('\n\n') }],
+      created_at: new Date((rep.create || 0) * 1000).toISOString(),
     });
   }
 
-  const leaf = nearestVisible(raw.current_node ?? null);
-
-  // Fold the active model up: nearest assistant model from the leaf upward.
-  let model: string | undefined;
-  let cur = leaf;
-  while (cur) {
+  // current_node → the representative of its turn (the active leaf).
+  let leafVis: Info | null = null;
+  for (let cur = raw.current_node ?? null; cur; cur = info.get(cur)?.parent ?? null) {
     const n = info.get(cur);
-    if (n?.role === 'assistant' && n.model) {
-      model = n.model;
-      break;
-    }
-    cur = n?.parent ?? null;
+    if (visible(n)) { leafVis = n!; break; }
+  }
+  const leafId = leafVis ? turnRep(leafVis).id : null;
+
+  // Fold the active model up: nearest assistant model from current_node upward.
+  let model: string | undefined;
+  for (let cur = raw.current_node ?? null; cur; cur = info.get(cur)?.parent ?? null) {
+    const n = info.get(cur);
+    if (n?.role === 'assistant' && n.model) { model = n.model; break; }
   }
 
   return {
     uuid: raw.conversation_id ?? convId,
     name: raw.title,
     model: model ?? null,
-    current_leaf_message_uuid: leaf,
+    current_leaf_message_uuid: leafId,
     chat_messages,
   };
 }
