@@ -7,12 +7,16 @@ import type { PlatformDom } from '../types';
  */
 export const chatgptDom: PlatformDom = {
   findScroller() {
-    // The message list lives in a scrollable container inside <main>. The exact
-    // class is unstable, so prefer an overflow-y container, falling back to main.
+    // The scroll container is an ANCESTOR of <main> (main itself is
+    // overflow:visible — verified live). Walk up to the nearest overflow-y
+    // auto/scroll element; fall back to main.
     const main = document.querySelector<HTMLElement>('main');
-    if (main) {
-      const scroller = main.querySelector<HTMLElement>('[class*="overflow-y-auto"], [class*="react-scroll-to-bottom"]');
-      if (scroller) return scroller;
+    if (!main) return null;
+    let el = main.parentElement;
+    while (el && el !== document.body) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === 'auto' || oy === 'scroll') return el;
+      el = el.parentElement;
     }
     return main;
   },
