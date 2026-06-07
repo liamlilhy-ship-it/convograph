@@ -45,8 +45,10 @@ import { revealUserMessage } from './promptRail';
  *     here — a mid-conversation answer is routed to edit, which branches a new
  *     question from it).
  *   - The answer streams live into the node: waitForGenerationComplete mirrors
- *     ChatGPT's streaming bubble text into `onDelta` (`onStart` stays unused — the
- *     new message ids only exist after the post-completion reload).
+ *     ChatGPT's streaming bubble text into `onDelta`. When generation finishes we
+ *     read the new answer's id from the DOM and report it via `onStart`, so the app
+ *     recognizes which reloaded node the answer became and keeps it expanded in its
+ *     in-line preview (rather than collapsing the just-read answer to a snippet).
  */
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -235,6 +237,23 @@ function lastAssistantEl(): HTMLElement | null {
   return a.length ? a[a.length - 1]! : null;
 }
 
+/**
+ * The id of the assistant turn that just finished generating, as the normalized
+ * tree will key it. The adapter collapses a multi-message turn to its TOPMOST
+ * visible message (`turnRep`), so we report the FIRST assistant message id in the
+ * new turn (== the last one for a plain text answer). Returns null if no new
+ * assistant element appeared (so nothing is reported and the draft just clears).
+ * App matches this against the reloaded tree's `assistantId` to keep that node
+ * expanded in its in-line preview.
+ */
+function finishedAnswerId(beforeEl: HTMLElement | null): string | null {
+  const last = lastAssistantEl();
+  if (!last || last === beforeEl) return null;
+  const first =
+    turnOf(last)?.querySelector<HTMLElement>('[data-message-author-role="assistant"][data-message-id]') ?? last;
+  return first.getAttribute('data-message-id') || null;
+}
+
 /** The rendered answer text of an assistant bubble — ONLY the `.markdown` answer
  *  body. Deliberately does NOT fall back to the element's textContent: that would
  *  capture a thinking model's "Thinking…" indicator, the "ChatGPT said:" a11y
@@ -319,7 +338,7 @@ async function doEdit(
   prompt: string,
   signal?: AbortSignal,
   onDelta?: (text: string) => void,
-): Promise<void> {
+): Promise<string | null> {
   if (!userId) throw new Error('Could not identify which message to edit.');
   const userEl = await ensureMounted(raw, userId);
   const turn = turnOf(userEl);
@@ -347,6 +366,7 @@ async function doEdit(
   const before = lastAssistantEl();
   sendBtn.click();
   await waitForGenerationComplete(signal, onDelta, before);
+  return finishedAnswerId(before);
 }
 
 async function doRegenerate(
@@ -354,7 +374,7 @@ async function doRegenerate(
   questionId: string,
   signal?: AbortSignal,
   onDelta?: (text: string) => void,
-): Promise<void> {
+): Promise<string | null> {
   const qEl = await ensureMounted(raw, questionId);
   const answerTurn = answerSectionAfter(qEl);
   if (!answerTurn) throw new Error("Couldn't find the answer to regenerate.");
@@ -371,6 +391,7 @@ async function doRegenerate(
   const before = lastAssistantEl();
   clickItem(tryAgain);
   await waitForGenerationComplete(signal, onDelta, before);
+  return finishedAnswerId(before);
 }
 
 /** Is the answer the tip of the VISIBLE branch (so the composer will append right
@@ -392,7 +413,7 @@ async function doFollowup(
   prompt: string,
   signal?: AbortSignal,
   onDelta?: (text: string) => void,
-): Promise<void> {
+): Promise<string | null> {
   // The composer continues the VISIBLE branch tip. The answer is always a leaf here
   // (classifyCreate routes an answer that already has a follow-up to edit), so if it
   // isn't already the tip we silently switch the chat to its branch — no prompt.
@@ -416,6 +437,7 @@ async function doFollowup(
   const before = lastAssistantEl();
   sendBtn.click();
   await waitForGenerationComplete(signal, onDelta, before);
+  return finishedAnswerId(before);
 }
 
 /** Load the raw conversation (warming the cache if needed) for reveal/switch. */
@@ -432,21 +454,22 @@ async function loadRaw(convId: string): Promise<ChatGptConversation> {
 // ---- Platform methods -----------------------------------------------------
 
 export async function createCompletion(params: CompletionParams): Promise<void> {
-  const { convId, parentMessageUuid, prompt, signal, onDelta } = params;
+  const { convId, parentMessageUuid, prompt, signal, onDelta, onStart } = params;
   const conv = await getNormalizedConversation(convId);
   const raw = await loadRaw(convId);
   const action = classifyCreate(conv, parentMessageUuid);
-  if (action.kind === 'edit') {
-    await doEdit(raw, action.userId, prompt, signal, onDelta);
-  } else {
-    await doFollowup(conv, raw, action.answerId, prompt, signal, onDelta);
-  }
+  const answerId =
+    action.kind === 'edit'
+      ? await doEdit(raw, action.userId, prompt, signal, onDelta)
+      : await doFollowup(conv, raw, action.answerId, prompt, signal, onDelta);
+  if (answerId) onStart?.({ assistantUuid: answerId });
   invalidateConversation(convId);
 }
 
 export async function retryCompletion(params: RetryParams): Promise<void> {
-  const { convId, parentMessageUuid, signal, onDelta } = params;
+  const { convId, parentMessageUuid, signal, onDelta, onStart } = params;
   const raw = await loadRaw(convId);
-  await doRegenerate(raw, parentMessageUuid, signal, onDelta);
+  const answerId = await doRegenerate(raw, parentMessageUuid, signal, onDelta);
+  if (answerId) onStart?.({ assistantUuid: answerId });
   invalidateConversation(convId);
 }

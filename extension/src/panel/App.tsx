@@ -529,6 +529,15 @@ export function App({ platform }: { platform: Platform }) {
         } else {
           await platform.createCompletion({ convId, parentMessageUuid: d.parentMessageUuid, prompt, signal: controller.signal, onDelta, onStart });
         }
+        // A completed write ends in a real send, which the platform persists as the
+        // new active branch (ChatGPT advances current_node). Drop any manual
+        // branch-jump override so the refetch highlights the freshly created branch
+        // instead of snapping back to the pre-write leaf. Inert on platforms that
+        // persist branch selection server-side (Claude never sets this ref), so
+        // their active-path behavior is unchanged.
+        if (!platform.capabilities.serverPersistsActiveBranch) {
+          selectedLeafRef.current = null;
+        }
         await requestRefresh();
         await load();
       } catch (e) {
