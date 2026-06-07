@@ -304,6 +304,12 @@ export async function getNormalizedConversation(convId: string): Promise<Normali
   return getConversation(convId);
 }
 
+/** The last-fetched RAW conversation (any age), for mapping a node to ChatGPT's
+ *  own prompt order (the rail). Populated by getConversation during load. */
+export function cachedRawConversation(convId: string): ChatGptConversation | null {
+  return rawCache.get(convId)?.raw ?? null;
+}
+
 export function parseConversationIdFromUrl(href: string = window.location.href): string | null {
   // ChatGPT chat URLs are /c/<uuid> (also under /g/g-…/c/<uuid> for GPTs).
   const m = href.match(/\/c\/([0-9a-f-]{36})/i);

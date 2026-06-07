@@ -86,6 +86,17 @@ export interface Platform {
   /** Switch the active branch to the node's leaf. Only called when
    *  `capabilities.serverBranchSwitch` is true. */
   setActiveLeaf(convId: string, node: DisplayNode): Promise<void>;
+  /** Bring a node's message into the DOM when the platform has lazy-unloaded it
+   *  (ChatGPT — via its prompt-navigation rail). Returns true if it's now
+   *  rendered/visible. Optional: platforms that keep the whole thread mounted
+   *  (Claude) don't implement it, and click-to-jump falls back to best-effort. */
+  revealNode?(node: DisplayNode): Promise<boolean>;
+  /** Whether switching to this node's branch is safe (reversible). ChatGPT can't
+   *  switch back from an image-only regenerate (no version arrows), so such a
+   *  branch is reported non-switchable and the app blocks the switch rather than
+   *  stranding the user. Optional: platforms without the limitation omit it (always
+   *  switchable). Only consulted for off-active-path nodes. */
+  canSwitchToNode?(node: DisplayNode): Promise<boolean>;
   createCompletion(params: CompletionParams): Promise<void>;
   retryCompletion(params: RetryParams): Promise<void>;
   detectTheme(): ThemeName;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchPlan } from '../platforms/chatgpt/branchSwitch';
+import { branchPlan, isReversiblySwitchable } from '../platforms/chatgpt/branchSwitch';
 import type { NormalizedConversation, NormalizedMessage } from '../platforms/model';
 
 const msg = (
@@ -13,6 +13,16 @@ const msg = (
   sender,
   content: [{ type: 'text', text: uuid }],
   created_at: new Date(t * 1000).toISOString(),
+});
+
+/** An image-only assistant answer (no text) — like a DALL·E generation. */
+const imgMsg = (uuid: string, parent: string | null, t: number): NormalizedMessage => ({
+  uuid,
+  parent_message_uuid: parent,
+  sender: 'assistant',
+  content: [{ type: 'text', text: '' }],
+  created_at: new Date(t * 1000).toISOString(),
+  files_v2: [{ file_kind: 'image', file_uuid: 'f', preview_url: 'u' }],
 });
 
 // u1 → (a1 | a1b regenerate sibling) ; the active branch a1 → u2 → a2.
@@ -82,5 +92,31 @@ describe('branchPlan (normalized-tree branch points)', () => {
     const steps = branchPlan(rootBranch, 'a_r1');
     expect(steps).toHaveLength(1);
     expect(steps[0]).toMatchObject({ siblingCount: 2, targetIdx: 0 });
+  });
+});
+
+describe('isReversiblySwitchable (block one-way image-regenerate branches)', () => {
+  // user u → [a_text (text answer), a_img (image-only answer)].
+  const conv: NormalizedConversation = {
+    uuid: 'c',
+    current_leaf_message_uuid: 'a_text',
+    chat_messages: [msg('u', null, 'human', 1), msg('a_text', 'u', 'assistant', 2), imgMsg('a_img', 'u', 3)],
+  };
+
+  it('blocks switching to an image-only regenerate sibling (no version arrows to return)', () => {
+    expect(isReversiblySwitchable(conv, 'a_img')).toBe(false);
+  });
+
+  it('allows switching to a text regenerate sibling', () => {
+    expect(isReversiblySwitchable(conv, 'a_text')).toBe(true);
+  });
+
+  it('allows a linear path (no branch point)', () => {
+    const lin: NormalizedConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a',
+      chat_messages: [msg('u', null, 'human', 1), msg('a', 'u', 'assistant', 2)],
+    };
+    expect(isReversiblySwitchable(lin, 'a')).toBe(true);
   });
 });

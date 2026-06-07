@@ -448,8 +448,13 @@ export function App({ platform }: { platform: Platform }) {
       };
 
       if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-        // Already active, or read-only platform — just scroll the chat to it.
+        // Already active, or read-only platform — just scroll the chat to it. The
+        // reveal step (ChatGPT's prompt rail) can take a few seconds, so show the
+        // spinner while it runs. Claude has no revealNode → no spinner (unchanged).
+        const spin = !!platform.revealNode;
+        if (spin) setJumping(node.id);
         const result = await jumpToNode(platform, convId, node);
+        if (spin) setJumping(null);
         warnIfUnreachable(result.centered);
         return;
       }

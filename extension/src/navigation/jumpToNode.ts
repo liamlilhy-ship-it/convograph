@@ -186,6 +186,18 @@ async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 40
     }
   }
 
+  // (c) platform reveal: bring a lazy-unloaded message into the DOM (ChatGPT drives
+  // its prompt-navigation rail). Runs regardless of the poll budget — it's the real
+  // fallback for off-window messages. Platforms without it (Claude) skip this.
+  if (!find() && platform.revealNode) {
+    const revealed = await platform.revealNode(node);
+    if (revealed) {
+      const el = find();
+      if (el) await alignToTop(platform, el);
+      return true;
+    }
+  }
+
   const el = find();
   if (el) {
     await alignToTop(platform, el);
@@ -218,15 +230,18 @@ export async function jumpToNode(
 ): Promise<JumpResult> {
   // Already the active branch, or no server-side switch available? Just scroll.
   if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-    // No branch switch here, so no re-render is coming: the bubble is either
-    // already on the page or it never will be (a platform that can't scroll-search
-    // to mount it — ChatGPT). Use a short budget so a miss is reported promptly
-    // (the caller shows a "not loaded" hint) instead of after the full settle poll.
-    // Claude keeps the full budget — its scroll-search needs the time to mount
-    // virtualized bubbles.
-    const budgetMs = platform.dom.scrollSearch === false ? 300 : undefined;
+    // Short in-place poll for a platform that can't scroll-search (ChatGPT); if the
+    // bubble isn't already rendered, scrollToNode's reveal step (the prompt rail)
+    // brings it in. Claude keeps the full budget for its scroll-search.
+    const budgetMs = platform.dom.scrollSearch === false ? 700 : undefined;
     const centered = await scrollToNode(platform, node, budgetMs);
     return { ok: true, refreshed: false, centered };
+  }
+  // Don't switch to a branch we couldn't switch back FROM (a ChatGPT image-only
+  // regenerate has no version arrows) — that would strand the user. Block it up
+  // front; the node's content is still readable via the graph preview.
+  if (platform.canSwitchToNode && !(await platform.canSwitchToNode(node))) {
+    return { ok: false, refreshed: false, error: "This branch can't be opened in ChatGPT's chat — view it in the preview." };
   }
   try {
     await platform.setActiveLeaf(convId, node);
@@ -236,6 +251,8 @@ export async function jumpToNode(
   // A server-persisted switch needs the SPA told to re-render; a client/DOM-driven
   // switch (ChatGPT) has already applied itself, so there's nothing to refresh.
   const refreshed = platform.capabilities.serverPersistsActiveBranch ? await requestRefresh() : true;
-  const centered = await scrollToNode(platform, node);
+  // Short poll for ChatGPT (the branch just switched); scrollToNode's reveal step
+  // then drives the prompt rail to the now-active target if it isn't rendered.
+  const centered = await scrollToNode(platform, node, platform.dom.scrollSearch === false ? 700 : undefined);
   return { ok: true, refreshed, centered };
 }

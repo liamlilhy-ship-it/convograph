@@ -1,6 +1,12 @@
 import type { Platform, ThemeName } from '../types';
-import { getConversation, getNormalizedConversation, parseConversationIdFromUrl } from './client';
-import { switchToLeaf } from './branchSwitch';
+import {
+  cachedRawConversation,
+  getConversation,
+  getNormalizedConversation,
+  parseConversationIdFromUrl,
+} from './client';
+import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
+import { revealNodeViaRail } from './promptRail';
 import { chatgptDom } from './dom';
 import tokensCss from './tokens.css?inline';
 
@@ -76,8 +82,29 @@ export const ChatGptPlatform: Platform = {
   fetchConversation: (convId) => getConversation(convId),
   async setActiveLeaf(convId, node) {
     const conv = await getNormalizedConversation(convId);
-    const ok = await switchToLeaf(conv, node.leafId);
+    // Pass the raw conversation so switchToLeaf can reveal an off-window branch
+    // point's arrow control via the prompt rail before driving it.
+    const ok = await switchToLeaf(conv, node.leafId, cachedRawConversation(convId) ?? undefined);
     if (!ok) throw new Error('Could not switch to that branch in ChatGPT');
+  },
+  // A regenerate branch whose answer is image-only has no version arrows, so it
+  // can't be switched back from — report it non-switchable so the app blocks the
+  // switch up front instead of stranding the user (see branchSwitch.ts).
+  async canSwitchToNode(node) {
+    const convId = parseConversationIdFromUrl();
+    if (!convId) return true;
+    const conv = await getNormalizedConversation(convId);
+    return isReversiblySwitchable(conv, node.leafId);
+  },
+  // Reach a lazy-unloaded message via ChatGPT's prompt rail (see promptRail.ts).
+  // Uses the RAW conversation (load() has cached it) so the prompt index matches
+  // ChatGPT's own rail exactly — the normalized tree can drift by merged turns.
+  async revealNode(node) {
+    const convId = parseConversationIdFromUrl();
+    if (!convId) return false;
+    const raw = cachedRawConversation(convId);
+    if (!raw) return false;
+    return revealNodeViaRail(raw, node);
   },
   createCompletion: unsupported,
   retryCompletion: unsupported,
