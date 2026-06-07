@@ -56,4 +56,31 @@ describe('branchPlan (normalized-tree branch points)', () => {
     // u1 now has 3 children; reaching a2 selects a1 (oldest = idx 0) of 3.
     expect(branchPlan(c2, 'a2')).toEqual([{ parent: 'u1', siblingCount: 3, targetIdx: 0 }]);
   });
+
+  // Editing the FIRST message makes every version a parent-less root. ChatGPT
+  // still renders a `< n/m >` control on the first bubble, so a root-level branch
+  // must produce a step (the bug: it was skipped, so click-to-jump silently
+  // no-oped on these chats).
+  const rootBranch: NormalizedConversation = {
+    uuid: 'c',
+    current_leaf_message_uuid: 'a_r2',
+    chat_messages: [
+      msg('r1', null, 'human', 1), // original first message
+      msg('a_r1', 'r1', 'assistant', 2),
+      msg('r2', null, 'human', 3), // newer edit of the first message (active)
+      msg('a_r2', 'r2', 'assistant', 4),
+    ],
+  };
+
+  it('plans a root-level branch (edited first message) reaching the newer root', () => {
+    const steps = branchPlan(rootBranch, 'a_r2');
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ siblingCount: 2, targetIdx: 1 });
+  });
+
+  it('plans a root-level branch reaching the older root (oldest-first ordering)', () => {
+    const steps = branchPlan(rootBranch, 'a_r1');
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ siblingCount: 2, targetIdx: 0 });
+  });
 });
