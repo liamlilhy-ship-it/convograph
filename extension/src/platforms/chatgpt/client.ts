@@ -310,6 +310,22 @@ export function cachedRawConversation(convId: string): ChatGptConversation | nul
   return rawCache.get(convId)?.raw ?? null;
 }
 
+/**
+ * Drop all cached state for a conversation so the NEXT fetch hits the network.
+ * The write actions (edit/regenerate/follow-up in writes.ts) call this after a
+ * DOM-driven change has landed, so App.load()'s refetch sees the new branch
+ * instead of the <10s-fresh raw cache (RAW_TTL) or the memoized normalized copy.
+ * Also frees one token-bucket slot so that forced refetch isn't paced away by the
+ * rate limiter — it only ever ADDS a slot for a user-initiated write, so it can't
+ * worsen read pacing.
+ */
+export function invalidateConversation(convId: string): void {
+  rawCache.delete(convId);
+  rawInFlight.delete(convId);
+  if (cache && cache.id === convId) cache = null;
+  if (tokens < BUCKET_CAP) tokens++;
+}
+
 export function parseConversationIdFromUrl(href: string = window.location.href): string | null {
   // ChatGPT chat URLs are /c/<uuid> (also under /g/g-…/c/<uuid> for GPTs).
   const m = href.match(/\/c\/([0-9a-f-]{36})/i);

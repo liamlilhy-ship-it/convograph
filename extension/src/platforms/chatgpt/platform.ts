@@ -7,15 +7,16 @@ import {
 } from './client';
 import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
 import { revealNodeViaRail } from './promptRail';
+import { createCompletion, retryCompletion } from './writes';
 import { chatgptDom } from './dom';
 import tokensCss from './tokens.css?inline';
 
 /**
- * The ChatGPT platform — READ-ONLY for v1. It fetches + normalizes the
- * conversation so the graph, hover/previews, and scroll-to-bubble work, but all
- * write capabilities (branch switch, edit, follow-up, regenerate) are off, so the
- * app hides those actions. The write methods throw as a guard; the capability
- * flags ensure they're never called.
+ * The ChatGPT platform. It fetches + normalizes the conversation so the graph,
+ * hover/previews, and scroll-to-bubble work, and drives ChatGPT's native UI for
+ * the write actions: branch switch (the < n/m > arrows, branchSwitch.ts) and
+ * edit / follow-up / regenerate (writes.ts). There's no server-side write API we
+ * call — every mutation is the faithful equivalent of a user clicking the page.
  */
 
 function detectTheme(): ThemeName {
@@ -24,10 +25,6 @@ function detectTheme(): ThemeName {
   if (/\blight\b/.test(cls)) return 'light';
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
-
-const unsupported = async (): Promise<never> => {
-  throw new Error('This action is not supported on ChatGPT yet');
-};
 
 // ChatGPT sizes its UI off the VIEWPORT, not the document flow: the shell that
 // wraps <main> is `w-screen` (width: 100vw), so padding <html>/<body> can't shrink
@@ -70,10 +67,11 @@ export const ChatGptPlatform: Platform = {
   siteName: 'chatgpt.com',
   hostnames: ['chatgpt.com', 'chat.openai.com'],
   assistantLabel: 'ChatGPT',
-  // Branch switching IS supported (via native arrows), but it's client-only —
-  // not persisted server-side. Content writes (edit/followup/regenerate) are not
-  // supported yet, so those action buttons stay hidden.
-  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: false, followup: false, regenerate: false },
+  // Branch switching and content writes (edit/followup/regenerate) are driven on
+  // the native UI; branch selection is client-only (not persisted server-side, so
+  // serverPersistsActiveBranch stays false), but edit/followup/regenerate end in a
+  // real send that ChatGPT persists, after which the app refetches the graph.
+  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true },
   rootParentUuid: '',
   tokensCss,
   dom: chatgptDom,
@@ -106,8 +104,8 @@ export const ChatGptPlatform: Platform = {
     if (!raw) return false;
     return revealNodeViaRail(raw, node);
   },
-  createCompletion: unsupported,
-  retryCompletion: unsupported,
+  createCompletion,
+  retryCompletion,
   detectTheme,
   applySidePanelInset,
 };
