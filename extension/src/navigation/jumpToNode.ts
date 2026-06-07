@@ -213,7 +213,14 @@ export async function jumpToNode(
 ): Promise<JumpResult> {
   // Already the active branch, or no server-side switch available? Just scroll.
   if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-    const centered = await scrollToNode(platform, node);
+    // No branch switch here, so no re-render is coming: the bubble is either
+    // already on the page or it never will be (a platform that can't scroll-search
+    // to mount it — ChatGPT). Use a short budget so a miss is reported promptly
+    // (the caller shows a "not loaded" hint) instead of after the full settle poll.
+    // Claude keeps the full budget — its scroll-search needs the time to mount
+    // virtualized bubbles.
+    const budgetMs = platform.dom.scrollSearch === false ? 300 : undefined;
+    const centered = await scrollToNode(platform, node, budgetMs);
     return { ok: true, refreshed: false, centered };
   }
   try {

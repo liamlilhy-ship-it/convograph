@@ -75,6 +75,11 @@ function usePagePushRight(platform: Platform, open: boolean, width: number) {
   }, [platform, open, width]);
 }
 
+// Shown when a click can't scroll to a message because the platform hasn't
+// loaded it (ChatGPT). Kept as a const so the auto-dismiss can give it a shorter
+// timeout than ordinary toasts without matching on free text.
+const UNREACHABLE_TOAST = "This message isn't loaded in the chat. Scroll to it in the chat, then click again.";
+
 export function App({ platform }: { platform: Platform }) {
   const [open, setOpen] = useState(false);
   // Full-screen: the panel fills the viewport instead of the right side. Same
@@ -363,10 +368,12 @@ export function App({ platform }: { platform: Platform }) {
     };
   }, [open, load]);
 
-  // Auto-dismiss the toast.
+  // Auto-dismiss the toast. The "not loaded" hint is transient guidance, so it
+  // clears fast (2s); other toasts (errors, branch-switch notices) stay 3.5s.
   useEffect(() => {
     if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), 3500);
+    const ms = toast === UNREACHABLE_TOAST ? 2000 : 3500;
+    const id = window.setTimeout(() => setToast(null), ms);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -396,11 +403,25 @@ export function App({ platform }: { platform: Platform }) {
       // In full-screen the chat is hidden, so its scroll won't stick — remember
       // this node so we replay the scroll when the user exits full-screen.
       if (fullscreenRef.current) fsJumpTargetRef.current = node;
+
+      // When a jump can't reach the target message, tell the user why instead of
+      // silently doing nothing. This only applies to platforms whose history is
+      // lazy-loaded and can't be scroll-searched (ChatGPT — dom.scrollSearch ===
+      // false): the message just isn't in the page yet. Claude mounts virtualized
+      // bubbles via scroll-search, so `centered` is reliable there and this never
+      // fires — its behavior is unchanged. Suppressed in full-screen, where the
+      // chat is hidden and the scroll is replayed on exit.
+      const warnIfUnreachable = (centered?: boolean) => {
+        if (centered || fullscreenRef.current) return;
+        if (platform.dom.scrollSearch === false) {
+          setToast(UNREACHABLE_TOAST);
+        }
+      };
+
       if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-        // Already active, or read-only platform — just scroll the chat to it
-        // (best-effort: ChatGPT can't reach messages it hasn't loaded, but that
-        // stays silent rather than nagging — the graph preview shows the content).
-        void jumpToNode(platform, convId, node);
+        // Already active, or read-only platform — just scroll the chat to it.
+        const result = await jumpToNode(platform, convId, node);
+        warnIfUnreachable(result.centered);
         return;
       }
       setJumping(node.id);
@@ -418,6 +439,9 @@ export function App({ platform }: { platform: Platform }) {
       if (!platform.capabilities.serverPersistsActiveBranch) {
         selectedLeafRef.current = node.leafId;
       }
+      // The branch switched; if we still couldn't scroll to the message it isn't
+      // loaded in the page — say so rather than leave the user wondering.
+      warnIfUnreachable(result.centered);
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
