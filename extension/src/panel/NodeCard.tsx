@@ -103,11 +103,16 @@ export function NodeCard({
   onRegenerate,
   style,
 }: NodeCardProps) {
-  const { assistantLabel, AssistantIcon, showActions } = usePlatformUI();
+  const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes } = usePlatformUI();
   const isHuman = node.role === 'human';
   const p = node.preview;
   const text = isHuman ? p.title : p.body || p.title;
   const hover: HoverApi = { onPreview, onPreviewEnd };
+  const thumbs = collectThumbs(p);
+  // A media-only turn (ChatGPT image upload / generated image) with no text: show
+  // the image(s) in the body, not an "(empty)" placeholder + a footer chip.
+  const mediaOnly = !text && !!mediaOnlyNodes && hasMedia(p);
+  const inlineMedia = mediaOnly && thumbs.length > 0;
   const branch = node.branchKind;
   const pipTitle =
     branch === 'regenerate'
@@ -244,16 +249,24 @@ export function NodeCard({
         <>
           <div className="cg-body">
             <div className="cg-content">
-              <div className="cg-snippet cg-text">
-                {text ? renderText(text, p.highlights) : <em style={{ opacity: 0.55 }}>(empty)</em>}
-              </div>
+              {text ? (
+                <div className="cg-snippet cg-text">{renderText(text, p.highlights)}</div>
+              ) : inlineMedia ? (
+                <div className="cg-inline-media">
+                  <ThumbStrip thumbs={thumbs} hover={hover} onOpenMedia={onOpenMedia} />
+                </div>
+              ) : mediaOnly ? null : (
+                <div className="cg-snippet cg-text">
+                  <em style={{ opacity: 0.55 }}>(empty)</em>
+                </div>
+              )}
               <RichKinds preview={p} />
             </div>
           </div>
           <Footer
             files={collectFiles(p)}
             artifacts={collectArtifacts(p)}
-            thumbs={collectThumbs(p)}
+            thumbs={inlineMedia ? [] : thumbs}
             hover={hover}
             onOpenMedia={onOpenMedia}
           />

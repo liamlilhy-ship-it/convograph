@@ -23,6 +23,11 @@ export const chatgptDom: PlatformDom = {
   findQuestionBubbles() {
     return Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role="user"]'));
   },
+  findBubbleByNodeId(id) {
+    // A turn's normalized id equals its `data-message-id` in the DOM, so we can
+    // locate the bubble directly — works for image-only turns that have no text.
+    return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+  },
   findComposer() {
     const editable = document.querySelector<HTMLElement>(
       '#prompt-textarea, form [contenteditable="true"], form textarea',

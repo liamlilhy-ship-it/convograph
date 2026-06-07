@@ -148,15 +148,20 @@ async function alignToTop(platform: Platform, el: HTMLElement): Promise<void> {
  * the chat is already on the right branch and the user scrolls manually.
  */
 async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 4000): Promise<boolean> {
-  // `questionText` is the turn's human message for BOTH the question node and
-  // its answer node — so clicking an answer still scrolls to the question bubble.
+  // `questionText`/`humanId` are the turn's human message for BOTH the question
+  // node and its answer node — so clicking an answer still scrolls to the question
+  // bubble. Prefer a direct id match (robust, and the ONLY option for an image-only
+  // turn with no text); fall back to matching the question text.
   const key = matchKey(stripMarkdown(node.questionText));
-  if (!key) return false;
+  const byId = (): HTMLElement | null =>
+    node.humanId ? platform.dom.findBubbleByNodeId?.(node.humanId) ?? null : null;
+  const find = (): HTMLElement | null => byId() ?? (key ? findBubble(platform, key) : null);
+  if (!key && !platform.dom.findBubbleByNodeId) return false; // nothing to match on
   const deadline = Date.now() + budgetMs;
 
   // (a) poll in place while the re-render settles.
   for (let i = 0; i < 8 && Date.now() < deadline; i++) {
-    const el = findBubble(platform, key);
+    const el = find();
     if (el) {
       await alignToTop(platform, el);
       return true;
@@ -173,7 +178,7 @@ async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 40
     for (let y = 0; y <= sc.scrollHeight && Date.now() < deadline; y += step) {
       sc.scrollTop = y;
       await sleep(120);
-      const el = findBubble(platform, key);
+      const el = find();
       if (el) {
         await alignToTop(platform, el);
         return true;
@@ -181,7 +186,7 @@ async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 40
     }
   }
 
-  const el = findBubble(platform, key);
+  const el = find();
   if (el) {
     await alignToTop(platform, el);
     return true;

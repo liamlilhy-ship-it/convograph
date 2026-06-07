@@ -1,5 +1,5 @@
-import type { NormalizedConversation, NormalizedMessage } from '../model';
-import type { ChatGptConversation, ChatGptMessage } from './types';
+import type { NormalizedConversation, NormalizedFile, NormalizedMessage } from '../model';
+import type { ChatGptConversation, ChatGptImagePart, ChatGptMessage } from './types';
 
 /**
  * Folds ChatGPT's `mapping`/`current_node` graph into the neutral
@@ -9,11 +9,17 @@ import type { ChatGptConversation, ChatGptMessage } from './types';
  * system prompts, per-turn `thoughts`/`reasoning_recap` (empty), and — crucially —
  * multiple messages PER assistant turn (a `commentary` preamble, several `web.run`
  * tool calls, then the `final` answer). We keep only USER-FACING messages
- * (`recipient: 'all'` + a text content type) and then COLLAPSE consecutive
- * same-role messages into a single turn. Without the collapse, a multi-message
- * assistant turn would reparent each message to the same user node and render as a
- * fake N-way branch (the bug this fixes). The collapse also yields the strict
- * human→assistant alternation `displayTree` requires.
+ * (`recipient: 'all'` + a text content type, OR media) and then COLLAPSE
+ * consecutive same-role messages into a single turn. Without the collapse, a
+ * multi-message assistant turn would reparent each message to the same user node
+ * and render as a fake N-way branch (the bug this fixes). The collapse also yields
+ * the strict human→assistant alternation `displayTree` requires.
+ *
+ * MEDIA: user-uploaded images/files and assistant-generated (DALL·E) images are
+ * extracted into `files_v2` (file id stashed in `file_uuid`, NO urls). The client
+ * resolves each id to a signed download URL before the tree is built. Generated
+ * images arrive as `role: 'tool'` messages; we treat such an image-bearing tool
+ * message as part of the assistant turn so its image folds into that answer card.
  */
 
 /** Content types that carry the user-visible answer (vs tool calls / reasoning). */
@@ -29,6 +35,61 @@ function extractText(m?: ChatGptMessage | null): string {
   return '';
 }
 
+/** `sediment://file_…` / `file-service://file-…` → bare file id. */
+function stripScheme(assetPointer: string): string {
+  return assetPointer.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+}
+
+/**
+ * Media attached to one raw message → `NormalizedFile[]` with the ChatGPT file id
+ * in `file_uuid` and NO urls (the client fills `thumbnail_url`/`preview_url`).
+ * Sources are merged + deduped by id: inline `image_asset_pointer` parts (images,
+ * incl. generated) and `metadata.attachments[]` (names + mime; for an image the
+ * attachment id equals the pointer's file id).
+ */
+function extractMedia(m?: ChatGptMessage | null): NormalizedFile[] {
+  if (!m) return [];
+  const byId = new Map<string, NormalizedFile>();
+  const ensure = (id: string): NormalizedFile => {
+    let f = byId.get(id);
+    if (!f) {
+      f = { file_uuid: id };
+      byId.set(id, f);
+    }
+    return f;
+  };
+
+  const parts = m.content?.parts;
+  if (Array.isArray(parts)) {
+    for (const p of parts) {
+      if (!p || typeof p !== 'object') continue;
+      if ((p as ChatGptImagePart).content_type !== 'image_asset_pointer') continue;
+      const ap = (p as ChatGptImagePart).asset_pointer;
+      const id = ap ? stripScheme(ap) : '';
+      if (!id) continue;
+      const f = ensure(id);
+      f.file_kind = 'image';
+      const sb = (p as ChatGptImagePart).size_bytes;
+      if (f.file_size_bytes == null && typeof sb === 'number') f.file_size_bytes = sb;
+    }
+  }
+
+  const atts = m.metadata?.attachments;
+  if (Array.isArray(atts)) {
+    for (const a of atts) {
+      const id = a?.id ? stripScheme(a.id) : '';
+      if (!id) continue;
+      const f = ensure(id);
+      if (a.name != null) f.file_name = a.name;
+      if (a.mime_type != null) f.file_type = a.mime_type;
+      if (a.size != null && f.file_size_bytes == null) f.file_size_bytes = a.size;
+      if ((a.mime_type ?? '').startsWith('image/')) f.file_kind = 'image';
+    }
+  }
+
+  return [...byId.values()];
+}
+
 type Info = {
   id: string;
   parent: string | null;
@@ -39,6 +100,10 @@ type Info = {
   hidden: boolean;
   ctype: string;
   recipient: string;
+  media: NormalizedFile[];
+  /** A `role:'tool'` message whose payload is a generated image (DALL·E) — shown
+   *  as part of the assistant turn it belongs to. */
+  genImage: boolean;
 };
 
 export function adaptChatGptConversation(
@@ -49,28 +114,44 @@ export function adaptChatGptConversation(
   const info = new Map<string, Info>();
   for (const [id, node] of Object.entries(mapping)) {
     const m = node?.message ?? null;
+    const role = m?.author?.role ?? 'unknown';
+    const recipient = m?.recipient ?? 'all';
+    const ctype = m?.content?.content_type ?? '';
+    const media = extractMedia(m);
+    const genImage =
+      role === 'tool' &&
+      recipient === 'all' &&
+      VISIBLE_CONTENT.has(ctype) &&
+      media.some((f) => f.file_kind === 'image');
     info.set(id, {
       id,
       parent: node?.parent ?? null,
-      role: m?.author?.role ?? 'unknown',
+      role,
       text: extractText(m),
       create: typeof m?.create_time === 'number' ? m.create_time : 0,
       model: typeof m?.metadata?.model_slug === 'string' ? m.metadata.model_slug : undefined,
       hidden: m?.metadata?.is_visually_hidden_from_conversation === true,
-      ctype: m?.content?.content_type ?? '',
-      recipient: m?.recipient ?? 'all',
+      ctype,
+      recipient,
+      media,
+      genImage,
     });
   }
 
-  // A user-facing message: not hidden, a user/assistant turn, addressed to the
-  // user (not a tool), with text content (drops tool calls / thoughts / recaps).
+  // Effective role for grouping: a generated-image tool message belongs to the
+  // assistant turn, so it groups (and renders) as assistant.
+  const effRole = (n: Info): string => (n.genImage ? 'assistant' : n.role);
+
+  // A user-facing message: not hidden, a user/assistant turn (generated images
+  // count as assistant), addressed to the user (not a tool), with text content OR
+  // media. The media clause lets image-only uploads/answers survive.
   const visible = (n?: Info): boolean =>
     !!n &&
     !n.hidden &&
-    (n.role === 'user' || n.role === 'assistant') &&
+    (effRole(n) === 'user' || effRole(n) === 'assistant') &&
     n.recipient === 'all' &&
     VISIBLE_CONTENT.has(n.ctype) &&
-    n.text.trim() !== '';
+    (n.text.trim() !== '' || n.media.length > 0);
 
   // Nearest visible ancestor of any role.
   const nva = (id: string): Info | null => {
@@ -84,13 +165,14 @@ export function adaptChatGptConversation(
   };
 
   // The "turn representative" of a visible node = the TOPMOST node of its
-  // maximal same-role run (a multi-message turn collapses to its first message).
+  // maximal same-(effective-)role run (a multi-message turn collapses to its
+  // first message).
   const repCache = new Map<string, Info>();
   const turnRep = (n: Info): Info => {
     const cached = repCache.get(n.id);
     if (cached) return cached;
     const anc = nva(n.id);
-    const rep = anc && anc.role === n.role ? turnRep(anc) : n;
+    const rep = anc && effRole(anc) === effRole(n) ? turnRep(anc) : n;
     repCache.set(n.id, rep);
     return rep;
   };
@@ -108,12 +190,24 @@ export function adaptChatGptConversation(
     members.sort((a, b) => a.create - b.create);
     const rep = info.get(repId)!;
     const ancestor = nva(rep.id); // a turn start → ancestor is opposite-role or null
+    // Merge media from every member of the turn, deduped by file id.
+    const files: NormalizedFile[] = [];
+    const seen = new Set<string>();
+    for (const mem of members) {
+      for (const f of mem.media) {
+        const key = f.file_uuid ?? f.file_name ?? '';
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        files.push(f);
+      }
+    }
     chat_messages.push({
       uuid: rep.id,
       parent_message_uuid: ancestor ? turnRep(ancestor).id : null,
-      sender: rep.role === 'user' ? 'human' : 'assistant',
-      content: [{ type: 'text', text: members.map((m) => m.text).join('\n\n') }],
+      sender: effRole(rep) === 'user' ? 'human' : 'assistant',
+      content: [{ type: 'text', text: members.map((m) => m.text).filter(Boolean).join('\n\n') }],
       created_at: new Date((rep.create || 0) * 1000).toISOString(),
+      ...(files.length ? { files_v2: files } : {}),
     });
   }
 

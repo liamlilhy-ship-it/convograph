@@ -57,6 +57,11 @@ export type PlatformDom = {
    *  mount on programmatic scroll). ChatGPT sets it false: it lazy-loads history a
    *  programmatic scroll can't fetch, so searching there just janks the chat. */
   scrollSearch?: boolean;
+  /** Find a rendered bubble by its node id, for platforms whose DOM tags each
+   *  message with a stable id (ChatGPT's `data-message-id`). Lets click-to-jump
+   *  locate a turn with no text to match — e.g. an image-only message. Optional:
+   *  platforms without it fall back to matching the question text. */
+  findBubbleByNodeId?(id: string): HTMLElement | null;
 };
 
 export interface Platform {

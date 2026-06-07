@@ -368,6 +368,35 @@ export function App({ platform }: { platform: Platform }) {
     };
   }, [open, load]);
 
+  // A platform may resolve media URLs asynchronously after the first load
+  // (ChatGPT fetches image URLs lazily to avoid rate-limiting). When it signals
+  // that new ones are ready, re-render so the thumbnails appear — a same-conv
+  // reload keeps the current tree, so this is flicker-free. Platforms that resolve
+  // media synchronously never emit the event, so this is inert for them.
+  useEffect(() => {
+    if (!open) return;
+    let t = 0;
+    const onResolved = () => {
+      clearTimeout(t);
+      t = window.setTimeout(() => void load(), 150);
+    };
+    window.addEventListener('cg-media-resolved', onResolved);
+    return () => {
+      window.removeEventListener('cg-media-resolved', onResolved);
+      clearTimeout(t);
+    };
+  }, [open, load]);
+
+  // A platform may pace its own requests to respect a strict rate limit (ChatGPT's
+  // conversation endpoint). When it has to wait, it signals so we can show a brief
+  // note instead of a silent long load. Inert for platforms that never emit it.
+  useEffect(() => {
+    if (!open) return;
+    const onRateLimited = () => setToast('ChatGPT is rate-limiting — the graph will refresh in a moment.');
+    window.addEventListener('cg-rate-limited', onRateLimited);
+    return () => window.removeEventListener('cg-rate-limited', onRateLimited);
+  }, [open]);
+
   // Auto-dismiss the toast. The "not loaded" hint is transient guidance, so it
   // clears fast (2s); other toasts (errors, branch-switch notices) stay 3.5s.
   useEffect(() => {
@@ -608,17 +637,22 @@ export function App({ platform }: { platform: Platform }) {
 
   // Presentation slice for the active platform (assistant label/icon + whether to
   // show write-action buttons). Consumed via context by the node/preview cards.
-  const platformUI: PlatformUI = useMemo(
-    () => ({
+  const platformUI: PlatformUI = useMemo(() => {
+    // ChatGPT turns can be media-only (generated/uploaded images with no text) and
+    // its images are large/portrait — both drive richer media presentation. Off
+    // for Claude, so its node/hover rendering is unchanged.
+    const mediaRich = platform.id === 'chatgpt';
+    return {
       assistantLabel: platform.assistantLabel,
       AssistantIcon: assistantIconFor(platform.id),
       showActions:
         platform.capabilities.edit ||
         platform.capabilities.followup ||
         platform.capabilities.regenerate,
-    }),
-    [platform],
-  );
+      mediaOnlyNodes: mediaRich,
+      fitHoverImage: mediaRich,
+    };
+  }, [platform]);
 
   // Style the toggle from anchor coords
   const toggleStyle: React.CSSProperties = anchor

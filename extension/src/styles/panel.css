@@ -568,6 +568,46 @@
   background: #fff;
   border-radius: 6px;
 }
+/* Quadrant-positioned image hover (large/portrait images): the box sizes to the
+   image and is only capped to the viewport so a very large image still fits whole
+   (no cropping). Positioning is handled in JS; this just lifts the fixed box's
+   size limits. */
+.cg-wpreview-fit {
+  width: auto;
+  max-width: min(70vw, 760px);
+  max-height: none;
+  overflow: visible;
+}
+.cg-wpreview-fit .cg-wpreview-img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 85vh;
+}
+
+/* Image-only answer: show the image IN the body (not as a footer attachment). */
+.cg-node .cg-inline-media {
+  display: flex;
+  margin-top: 2px;
+}
+.cg-node .cg-inline-media .cg-thumbstrip {
+  overflow: visible;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cg-node .cg-inline-media .cg-wthumb,
+.cg-node .cg-inline-media .cg-wthumb-img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+}
+.cg-node .cg-inline-media .cg-wthumb img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 170px;
+  object-fit: contain;
+}
 .cg-wpreview-frame {
   width: 100%;
   height: 320px;

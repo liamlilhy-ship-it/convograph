@@ -16,6 +16,14 @@ export type PlatformUI = {
   AssistantIcon: IconCmp;
   /** Render the quick-action buttons. False for read-only platforms. */
   showActions: boolean;
+  /** Some platforms have media-only turns (e.g. a generated image with no text).
+   *  When true, a node with media but no text renders just its media instead of an
+   *  "(empty)" placeholder. Default (Claude): keep the placeholder. */
+  mediaOnlyNodes?: boolean;
+  /** Fit a hovered image to the viewport (preserve aspect ratio, reposition to
+   *  stay on-screen) instead of the fixed-size hover box. For platforms with large
+   *  or portrait images. Default (Claude): unchanged fixed-size hover. */
+  fitHoverImage?: boolean;
 };
 
 const DEFAULT: PlatformUI = {
