@@ -1,22 +1,28 @@
 import type { ChatGptConversation, ChatGptMessage } from './types';
 import type { DisplayNode } from '../../tree/displayTree';
+import { chatgptDom } from './dom';
 
 /**
- * Reaches a lazy-unloaded message via ChatGPT's prompt-navigation rail — the
- * fixed strip of dashes on the right of a long chat, one per user prompt (oldest→
- * newest along the active branch). Clicking dash N makes ChatGPT scroll to AND
- * render the Nth user message — the one lever that defeats the lazy-load window
- * (verified live; a plain scrollTop won't). Used both for click-to-jump and to
- * bring a branch point's `< n/m >` arrows into the DOM before driving them.
+ * Reaches a lazy-unloaded message in a long ChatGPT chat so click-to-jump and
+ * branch-switch can act on it. ChatGPT renders only a window of recent turns and
+ * virtualizes the rest, so the target may not be in the DOM. Two mechanisms, tried
+ * in order (the second is the fallback when ChatGPT doesn't offer the first):
  *
- * Index source = the target's USER-PROMPT ANCESTOR COUNT in the raw tree, i.e. how
- * many user prompts precede it on the path from the root. That's exactly its rail
- * position and it's BRANCH-INDEPENDENT (the prefix up to a prompt is shared across
- * branches) — crucial because a node's `leafId` can descend into a *different*
- * branch (e.g. an image regenerate below the prompt), whose prompt list wouldn't
- * match the rail. We then CONVERGE: click the guessed dash, read which prompt we
- * landed on (same ancestor-count metric), step toward the target, and confirm by
- * the target's own `data-message-id` (a mis-index can't succeed).
+ *   1. The prompt-navigation rail — the fixed strip of dashes on the right, one per
+ *      user prompt. Clicking dash N makes ChatGPT scroll to AND render the Nth user
+ *      message. Fast and exact, but ChatGPT only shows the rail on some chats/UI
+ *      versions. Indexed by the target's USER-PROMPT ANCESTOR COUNT (branch-
+ *      independent: the prefix up to a prompt is shared across branches, so a node
+ *      whose `leafId` descends into a *different* branch still maps to the right
+ *      dash). We CONVERGE: click the guessed dash, read which prompt we landed on,
+ *      step toward the target, confirm by the target's own `data-message-id`.
+ *
+ *   2. A stepped scroll of the thread — when the rail is absent or fails. Scrolls
+ *      toward the target (direction from its tree DEPTH vs. the rendered turns) until
+ *      its `data-message-id` mounts. BEST-EFFORT: ChatGPT virtualizes far turns into
+ *      zero-height placeholders that a programmatic scroll can't always re-hydrate,
+ *      so this can't reach every message — it covers what it can and fails fast
+ *      (clean "couldn't reach" toast) rather than janking the chat.
  */
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -89,34 +95,65 @@ function landedIndex(raw: ChatGptConversation): number | null {
   return bestId ? rawUserIndex(raw, bestId) : null;
 }
 
-/** Drive the rail until the message `targetId` is shown. Self-correcting. */
-async function revealByTarget(raw: ChatGptConversation, targetId: string): Promise<boolean> {
-  const ideal = rawUserIndex(raw, targetId);
-  if (ideal < 0) return false;
+/** Is the message `id` mounted in the DOM (ChatGPT keeps loaded turns mounted even
+ *  when scrolled off-screen)? Once mounted, the caller's alignToTop positions it, so
+ *  this is the success signal for the scroll reveal. */
+function messageMounted(id: string): boolean {
+  return !!document.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
+}
 
-  let btns: HTMLButtonElement[] = [];
-  for (let i = 0; i < 12; i++) {
-    btns = railButtons();
-    if (btns.length) break;
-    await wait(150);
+/** Is the message `id` mounted AND within (or just past) the viewport? */
+function messageInView(id: string): boolean {
+  const el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.top > -300 && r.top < window.innerHeight;
+}
+
+/** Depth of a message in the raw tree (ancestor count). Monotonic with vertical
+ *  position along a branch, so two on-path messages compare older(smaller)→newer. */
+function depthOf(raw: ChatGptConversation, id: string): number {
+  const mapping = raw.mapping ?? {};
+  if (!mapping[id]) return -1;
+  const guard = new Set<string>();
+  let depth = 0;
+  let cur: string | null = id;
+  while (cur && !guard.has(cur)) {
+    guard.add(cur);
+    const parent: string | null = mapping[cur]?.parent ?? null;
+    if (!parent) break;
+    cur = parent;
+    depth++;
   }
-  if (!btns.length) return false; // no rail (short chat / different UI)
+  return depth;
+}
 
-  const sel = `[data-message-id="${CSS.escape(targetId)}"]`;
-  const inView = (): boolean => {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    return r.top > -300 && r.top < window.innerHeight;
-  };
+/** Depth span of the messages currently rendered, to choose a scroll direction. */
+function renderedDepthRange(raw: ChatGptConversation): { min: number; max: number } | null {
+  const mapping = raw.mapping ?? {};
+  let min = Infinity;
+  let max = -Infinity;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-message-id]')) {
+    const id = el.getAttribute('data-message-id');
+    if (!id || !mapping[id]) continue;
+    const d = depthOf(raw, id);
+    if (d < min) min = d;
+    if (d > max) max = d;
+  }
+  return min <= max ? { min, max } : null;
+}
+
+/** Mechanism 1: drive the rail to `targetId`. Self-correcting; the caller has
+ *  confirmed the rail is present. Returns false if it can't converge. */
+async function revealViaRail(raw: ChatGptConversation, targetId: string, ideal: number): Promise<boolean> {
   const verify = async (steps: number): Promise<boolean> => {
     for (let i = 0; i < steps; i++) {
-      if (inView()) return true;
+      if (messageInView(targetId)) return true;
       await wait(200);
     }
     return false;
   };
-
+  let btns = railButtons();
   let dash = Math.max(0, Math.min(btns.length - 1, ideal));
   for (let attempt = 0; attempt < 5; attempt++) {
     btns = railButtons();
@@ -131,6 +168,49 @@ async function revealByTarget(raw: ChatGptConversation, targetId: string): Promi
     dash = next;
   }
   return false;
+}
+
+/** Mechanism 2 (fallback): scroll the thread toward `targetId` until it mounts.
+ *  Best-effort — direction from the target's depth vs. the rendered window; gives up
+ *  fast once a step makes no progress (scroll didn't move AND nothing new rendered),
+ *  which is the signal ChatGPT won't hydrate further this way. */
+async function revealViaScroll(raw: ChatGptConversation, targetId: string): Promise<boolean> {
+  const sc = chatgptDom.findScroller();
+  const targetDepth = depthOf(raw, targetId);
+  if (!sc || targetDepth < 0) return false;
+  const deadline = Date.now() + 6000;
+  let prevSig = '';
+  let prevTop = -1;
+  let stall = 0;
+  while (Date.now() < deadline) {
+    if (messageMounted(targetId)) return true;
+    const rd = renderedDepthRange(raw);
+    const sig = rd ? `${rd.min}:${rd.max}` : 'none';
+    const moved = Math.abs(sc.scrollTop - prevTop) > 4;
+    if (sig === prevSig && !moved) {
+      if (++stall >= 3) break; // scroll pinned and nothing new loaded → dead end
+    } else {
+      stall = 0;
+    }
+    prevSig = sig;
+    prevTop = sc.scrollTop;
+    // Older (smaller depth) is above → scroll up; newer → down.
+    const dir = !rd ? -1 : targetDepth < rd.min ? -1 : targetDepth > rd.max ? 1 : targetDepth <= (rd.min + rd.max) / 2 ? -1 : 1;
+    sc.scrollTop += dir * Math.max(200, sc.clientHeight * 0.8);
+    sc.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await wait(280); // let any lazy fetch + render settle
+  }
+  return messageMounted(targetId);
+}
+
+/** Reveal `targetId`: the rail when ChatGPT offers it, else a stepped scroll. */
+async function revealByTarget(raw: ChatGptConversation, targetId: string): Promise<boolean> {
+  if (messageInView(targetId)) return true;
+  const ideal = rawUserIndex(raw, targetId);
+  if (ideal >= 0 && railButtons().length) {
+    if (await revealViaRail(raw, targetId, ideal)) return true;
+  }
+  return revealViaScroll(raw, targetId);
 }
 
 /** Reveal a graph node's question bubble (for click-to-jump). */

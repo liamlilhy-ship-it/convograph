@@ -24,6 +24,28 @@ export type ChatGptAttachment = {
   height?: number;
 };
 
+/** One web image inside a content reference (a web-search result the model embedded
+ *  inline). Unlike uploads/DALL·E, these carry DIRECT cdn urls (`images.openai.com`
+ *  / search thumbnails) — no files-endpoint resolution. ChatGPT ships two shapes:
+ *  flat (`image_v2` — urls on the entry) and nested (`image_group` — urls under
+ *  `image_result`); `image_result` covers the latter. */
+export type ChatGptRefImage = {
+  url?: string; // source page
+  content_url?: string; // full-size, directly viewable
+  thumbnail_url?: string; // inline-size, directly viewable
+  title?: string;
+  image_result?: ChatGptRefImage; // nested-shape wrapper (image_group)
+};
+
+/** An inline reference token ChatGPT embeds in the answer text, wrapped in private-
+ *  use sentinels (U+E200…U+E201). Image-carrying types (`image_v2`, `image_group`,
+ *  …) expose an `images[]` we surface as media; citation types (`grouped_webpages`,
+ *  `sources_footnote`) have no `images[]` and the adapter only strips their text. */
+export type ChatGptContentReference = {
+  type?: string;
+  images?: ChatGptRefImage[];
+};
+
 export type ChatGptMessage = {
   id?: string;
   author?: { role?: string };
@@ -45,6 +67,10 @@ export type ChatGptMessage = {
     is_visually_hidden_from_conversation?: boolean;
     /** Files uploaded on this message (images + documents). */
     attachments?: ChatGptAttachment[];
+    /** Inline reference tokens (web-search images + citations) the model wove into
+     *  the answer text. The adapter strips their text tokens and surfaces the
+     *  `image_v2` images as media. */
+    content_references?: ChatGptContentReference[];
   };
 };
 

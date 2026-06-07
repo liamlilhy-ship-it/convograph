@@ -1,5 +1,5 @@
 import type { NormalizedConversation, NormalizedFile, NormalizedMessage } from '../model';
-import type { ChatGptConversation, ChatGptImagePart, ChatGptMessage } from './types';
+import type { ChatGptConversation, ChatGptImagePart, ChatGptMessage, ChatGptRefImage } from './types';
 
 /**
  * Folds ChatGPT's `mapping`/`current_node` graph into the neutral
@@ -20,24 +20,50 @@ import type { ChatGptConversation, ChatGptImagePart, ChatGptMessage } from './ty
  * resolves each id to a signed download URL before the tree is built. Generated
  * images arrive as `role: 'tool'` messages; we treat such an image-bearing tool
  * message as part of the assistant turn so its image folds into that answer card.
+ * Inline web-search images (the model's `image_v2` content references) carry direct
+ * cdn urls, so they're emitted with urls already set (no resolution needed); the
+ * citation/image TOKENS the model weaves into the text are stripped (stripRefTokens).
  */
 
 /** Content types that carry the user-visible answer (vs tool calls / reasoning). */
 const VISIBLE_CONTENT = new Set(['text', 'multimodal_text']);
 
+/**
+ * Strips ChatGPT's inline reference tokens from answer text. When the model cites
+ * the web or embeds search images, it weaves a marker into the text wrapped in
+ * private-use sentinels: U+E200 (start) … U+E201 (end), with U+E202 separating
+ * sub-parts. The UI replaces each span with rendered images/citation chips; as
+ * raw text they read as garbage (e.g. "iturn812489image3turn812489image6" for an
+ * image token, "citeturn…search…" for a citation). Removing the whole sentinel
+ * span — plus any stray sentinel char — yields the clean prose the DOM shows (which
+ * also makes click-to-jump text matching more reliable). The images themselves are
+ * surfaced separately as media (see extractMedia). PUA chars never occur in real
+ * content, so this can't delete anything the user typed.
+ */
+function stripRefTokens(s: string): string {
+  return s.replace(/[\s\S]*?/g, '').replace(/[-]/g, '');
+}
+
 function extractText(m?: ChatGptMessage | null): string {
   const c = m?.content;
   if (!c) return '';
   if (Array.isArray(c.parts)) {
-    return c.parts.filter((p): p is string => typeof p === 'string').join('\n').trim();
+    return stripRefTokens(c.parts.filter((p): p is string => typeof p === 'string').join('\n')).trim();
   }
-  if (typeof c.text === 'string') return c.text.trim();
+  if (typeof c.text === 'string') return stripRefTokens(c.text).trim();
   return '';
 }
 
 /** `sediment://file_…` / `file-service://file-…` → bare file id. */
 function stripScheme(assetPointer: string): string {
   return assetPointer.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+}
+
+/** Normalizes one content-reference image entry to its url fields. ChatGPT ships
+ *  two shapes: flat (`image_v2`: urls on the entry) and nested (`image_group`: urls
+ *  under `image_result`). Unwrap the nesting so both read the same. */
+function imageFields(im: ChatGptRefImage | null | undefined): ChatGptRefImage {
+  return (im?.image_result ?? im) ?? {};
 }
 
 /**
@@ -84,6 +110,34 @@ function extractMedia(m?: ChatGptMessage | null): NormalizedFile[] {
       if (a.mime_type != null) f.file_type = a.mime_type;
       if (a.size != null && f.file_size_bytes == null) f.file_size_bytes = a.size;
       if ((a.mime_type ?? '').startsWith('image/')) f.file_kind = 'image';
+    }
+  }
+
+  // Inline web-search images the model embedded in the answer text, carried in
+  // `content_references`. ChatGPT has several reference types for these (`image_v2`,
+  // `image_group`, …) and may add more, so rather than match type names we treat ANY
+  // reference that exposes an `images[]` as an image carrier — citations
+  // (`grouped_webpages`/`sources_footnote`) don't have that array, so they're skipped.
+  // Each entry is either flat (`image_v2`) or wraps the fields under `image_result`
+  // (`image_group`); `imageFields` normalizes both. These carry DIRECT cdn urls, so
+  // we set thumbnail_url/preview_url here and the client skips files-endpoint
+  // resolution. Keyed by url (no ChatGPT file id) for dedupe.
+  const refs = m.metadata?.content_references;
+  if (Array.isArray(refs)) {
+    for (const ref of refs) {
+      if (!ref || !Array.isArray(ref.images)) continue;
+      for (const im of ref.images) {
+        const src = imageFields(im);
+        const full = src.content_url ?? undefined;
+        const thumb = src.thumbnail_url ?? undefined;
+        const key = full ?? thumb;
+        if (!key) continue;
+        const f = ensure(key);
+        f.file_kind = 'image';
+        f.thumbnail_url = thumb ?? full;
+        f.preview_url = full ?? thumb;
+        if (src.title && f.file_name == null) f.file_name = src.title;
+      }
     }
   }
 

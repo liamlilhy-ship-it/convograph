@@ -129,6 +129,132 @@ describe('chatgpt adapter media extraction', () => {
     expect(t1.files_v2![0]).toMatchObject({ file_uuid: 'file_gen2', file_kind: 'image' });
   });
 
+  // ChatGPT weaves inline reference tokens into answer text, wrapped in private-use
+  // sentinels U+E200 (start) … U+E201 (end) with U+E202 separators. The UI renders
+  // them as images/citation chips; raw, they read as garbage. The adapter must strip
+  // the token span from the text AND (for image_v2) surface the images as media with
+  // their direct cdn urls.
+  it('strips inline ref tokens from text and surfaces image_v2 images as media', () => {
+    const raw: ChatGptConversation = {
+      conversation_id: 'c',
+      current_node: 'a1',
+      mapping: {
+        root: { id: 'root', parent: null, children: ['u1'], message: null },
+        u1: { id: 'u1', parent: 'root', children: ['a1'], message: { author: { role: 'user' }, create_time: 1, recipient: 'all', content: { content_type: 'text', parts: ['plan a trip'] } } },
+        a1: {
+          id: 'a1',
+          parent: 'u1',
+          children: [],
+          message: {
+            author: { role: 'assistant' },
+            create_time: 2,
+            recipient: 'all',
+            // leading image token span + a trailing citation span, both PUA-wrapped
+            content: { content_type: 'text', parts: ['iturn8image3turn8image6\n\nHere is the planciteturn1search2.'] },
+            metadata: {
+              content_references: [
+                {
+                  type: 'image_v2',
+                  images: [
+                    { url: 'https://getty.example/p', content_url: 'https://images.openai.com/full1', thumbnail_url: 'https://images.openai.com/thumb1', title: 'Everglades' },
+                    { url: 'https://bing.example/p', content_url: 'https://images.openai.com/full2', thumbnail_url: 'https://tse1.mm.bing.net/thumb2', title: 'Worth Avenue' },
+                  ],
+                },
+                { type: 'grouped_webpages' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const conv = adaptChatGptConversation(raw, 'c');
+    const a1 = conv.chat_messages.find((m) => m.uuid === 'a1')!;
+    // text is clean prose — no PUA chars, no token garbage
+    expect(a1.content[0]!.text).toBe('Here is the plan.');
+    expect(/[-]/.test(a1.content[0]!.text ?? '')).toBe(false);
+    // both web images surfaced with direct urls already set (no resolution needed)
+    expect(a1.files_v2).toHaveLength(2);
+    expect(a1.files_v2![0]).toMatchObject({
+      file_kind: 'image',
+      thumbnail_url: 'https://images.openai.com/thumb1',
+      preview_url: 'https://images.openai.com/full1',
+      file_name: 'Everglades',
+    });
+    expect(a1.files_v2![1]).toMatchObject({ file_kind: 'image', thumbnail_url: 'https://tse1.mm.bing.net/thumb2', preview_url: 'https://images.openai.com/full2' });
+  });
+
+  // `image_group` is a second inline-image reference type whose entries nest the url
+  // fields under `image_result` (vs `image_v2`'s flat entries). Extraction is generic
+  // (any reference with an `images[]`, unwrapping `image_result`), so both work.
+  it('surfaces image_group images (nested image_result shape)', () => {
+    const raw: ChatGptConversation = {
+      conversation_id: 'c',
+      current_node: 'a1',
+      mapping: {
+        root: { id: 'root', parent: null, children: ['u1'], message: null },
+        u1: { id: 'u1', parent: 'root', children: ['a1'], message: { author: { role: 'user' }, create_time: 1, recipient: 'all', content: { content_type: 'text', parts: ['show me windows'] } } },
+        a1: {
+          id: 'a1',
+          parent: 'u1',
+          children: [],
+          message: {
+            author: { role: 'assistant' },
+            create_time: 2,
+            recipient: 'all',
+            content: { content_type: 'text', parts: ['Here are some examples.'] },
+            metadata: {
+              content_references: [
+                {
+                  type: 'image_group',
+                  images: [
+                    { image_result: { content_url: 'https://images.openai.com/ig-full', thumbnail_url: 'https://images.openai.com/ig-thumb', title: 'Windows in Thick Walls' } },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    };
+    const conv = adaptChatGptConversation(raw, 'c');
+    const a1 = conv.chat_messages.find((m) => m.uuid === 'a1')!;
+    expect(a1.content[0]!.text).toBe('Here are some examples.');
+    expect(a1.files_v2).toHaveLength(1);
+    expect(a1.files_v2![0]).toMatchObject({
+      file_kind: 'image',
+      thumbnail_url: 'https://images.openai.com/ig-thumb',
+      preview_url: 'https://images.openai.com/ig-full',
+      file_name: 'Windows in Thick Walls',
+    });
+  });
+
+  it('keeps a citation-only answer as clean text with no media', () => {
+    const raw: ChatGptConversation = {
+      conversation_id: 'c',
+      current_node: 'a1',
+      mapping: {
+        root: { id: 'root', parent: null, children: ['u1'], message: null },
+        u1: { id: 'u1', parent: 'root', children: ['a1'], message: { author: { role: 'user' }, create_time: 1, recipient: 'all', content: { content_type: 'text', parts: ['q'] } } },
+        a1: {
+          id: 'a1',
+          parent: 'u1',
+          children: [],
+          message: {
+            author: { role: 'assistant' },
+            create_time: 2,
+            recipient: 'all',
+            content: { content_type: 'text', parts: ['The answer is 42citeturn0search0 exactly.'] },
+            metadata: { content_references: [{ type: 'grouped_webpages' }] },
+          },
+        },
+      },
+    };
+    const conv = adaptChatGptConversation(raw, 'c');
+    const a1 = conv.chat_messages.find((m) => m.uuid === 'a1')!;
+    expect(a1.content[0]!.text).toBe('The answer is 42 exactly.');
+    expect(a1.files_v2).toBeUndefined();
+  });
+
   it('does NOT promote ordinary tool messages (no image) to visible turns', () => {
     const raw: ChatGptConversation = {
       conversation_id: 'c',
