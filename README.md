@@ -47,8 +47,8 @@ Convograph is **not on the Chrome Web Store yet**, so you install it by building
 ### Option A — Manual install
 
 ```bash
-git clone https://github.com/liamlilhy-ship-it/chat-tree.git
-cd chat-tree/extension
+git clone https://github.com/liamlilhy-ship-it/convograph.git
+cd convograph/extension
 npm install
 npm run build
 ```
@@ -58,7 +58,7 @@ Then load it into Chrome:
 1. Open `chrome://extensions`.
 2. Enable **Developer mode** (top‑right toggle).
 3. Click **Load unpacked**.
-4. Select the `chat-tree/extension/dist` folder.
+4. Select the `convograph/extension/dist` folder.
 
 The extension appears as **"Conversation Graph."** Open claude.ai or ChatGPT, then click the **Convograph** pill near the composer (or press **⌘/Ctrl + Shift + G**).
 
@@ -66,32 +66,9 @@ The extension appears as **"Conversation Graph."** Open claude.ai or ChatGPT, th
 
 Prefer to let an AI coding agent (Claude Code, Cursor, etc.) handle the build? Paste it this prompt:
 
-> Clone https://github.com/liamlilhy-ship-it/chat-tree. In the `extension/` directory, run `npm install` then `npm run build`. When it finishes, tell me the absolute path to `extension/dist` and walk me through loading it as an unpacked extension at `chrome://extensions`.
+> Clone https://github.com/liamlilhy-ship-it/convograph. In the `extension/` directory, run `npm install` then `npm run build`. When it finishes, tell me the absolute path to `extension/dist` and walk me through loading it as an unpacked extension at `chrome://extensions`.
 
 The agent can clone and build for you, but **you** still load the unpacked `dist/` folder — agents can't toggle Chrome's developer‑mode UI.
-
-## Updating
-
-```bash
-git pull
-cd extension
-npm run build
-```
-
-Then click **Reload** on the extension's card in `chrome://extensions`. The loaded `dist/` folder is a build artifact (gitignored), so a `git pull` alone won't refresh what Chrome is running — you need to rebuild and reload.
-
-## Development
-
-From the `extension/` directory:
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Start the Vite dev server. |
-| `npm run build` | Type‑check and bundle (`tsc --noEmit && vite build`). |
-| `npm test` | Run the test suite once (`vitest run`). |
-| `npm run test:watch` | Run tests in watch mode. |
-
-The shared panel UI lives in `src/panel`; per‑site adapters live in `src/platforms/{claude,chatgpt}`.
 
 ## License
 
