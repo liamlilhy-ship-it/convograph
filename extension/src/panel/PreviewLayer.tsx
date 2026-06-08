@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, type ReactNode } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import type { ImageRef, WidgetRef, FileRef } from '../tree/contentKinds';
+import { isHtmlArtifact } from '../tree/contentKinds';
 import { FullPreview } from './FullPreview';
 import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
@@ -241,7 +242,8 @@ function renderParts(
         icon: <FileIcon size={11} />,
         title: pv.artifact.title,
         body: <ArtifactPreview artifact={pv.artifact} />,
-        showFontCtl: true,
+        // HTML artifacts render in an iframe, where the A−/A+ text scaling is moot.
+        showFontCtl: !isHtmlArtifact(pv.artifact),
       };
     case 'file':
       return {
@@ -329,9 +331,27 @@ function FilePreview({ file }: { file: FileRef }) {
   );
 }
 
-/** Renders a generated document's inline text as markdown — same `.cg-pv-md`
- *  treatment (and A−/A+ font scaling) as a node's full preview. */
+/** Renders a generated document. An HTML artifact renders as a LIVE page in a
+ *  sandboxed (scripts-enabled) iframe that fills the window; every other type
+ *  renders its inline text as markdown — same `.cg-pv-md` treatment (and A−/A+
+ *  font scaling) as a node's full preview. */
 function ArtifactPreview({ artifact }: { artifact: ArtifactView }) {
+  if (isHtmlArtifact(artifact)) {
+    return (
+      <div className="cg-pv-content cg-pv-media">
+        <iframe
+          className="cg-pv-widget-frame"
+          sandbox="allow-scripts"
+          srcDoc={artifact.content}
+          title={artifact.title || 'HTML preview'}
+        />
+      </div>
+    );
+  }
+  return <ArtifactMarkdown artifact={artifact} />;
+}
+
+function ArtifactMarkdown({ artifact }: { artifact: ArtifactView }) {
   const html = useMemo(() => renderMarkdown(artifact.content), [artifact.content]);
   return (
     <div className="cg-pv-content">

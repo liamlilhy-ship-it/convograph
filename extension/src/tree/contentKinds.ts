@@ -22,6 +22,15 @@ export type WidgetRef = { title?: string; code: string; isSvg: boolean };
  *    the artifact id — dedupes create/update versions and keys the preview window.
  */
 export type ArtifactRef = { name: string; type?: string; id?: string; content?: string };
+/**
+ * True for a Claude-generated HTML artifact that carries inline content. These
+ * render as a LIVE page in a sandboxed iframe (hover + click preview) instead of
+ * showing their HTML source as markdown. (Only Claude's `artifacts` pipeline
+ * produces HTML-typed artifacts, so this is effectively Claude-only.)
+ */
+export function isHtmlArtifact(a: { type?: string; content?: string }): boolean {
+  return !!a.content && !!a.type && a.type.toLowerCase().includes('html');
+}
 /** Media extracted from a message's non-text fields, passed into detectKinds. */
 export type MediaRefs = {
   images: ImageRef[];

@@ -77,7 +77,7 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
  */
 const ARTIFACT_IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif']);
 
-function mediaOf(msg: ApiMessage): MediaRefs {
+function mediaOf(msg: ApiMessage, sandboxFiles: Map<string, string>): MediaRefs {
   const images: ImageRef[] = [];
   const files: FileRef[] = [];
   const widgets: WidgetRef[] = [];
@@ -109,7 +109,12 @@ function mediaOf(msg: ApiMessage): MediaRefs {
         if (type && ARTIFACT_IMAGE_EXT.has(type)) continue;
         if (seenArtifact.has(name)) continue;
         seenArtifact.add(name);
-        artifacts.push({ name, type });
+        // HTML files Claude wrote are previewable: attach the reconstructed file
+        // content (from create_file/str_replace) so the node can render them live
+        // on hover + click. Files with no recoverable content (e.g. produced by a
+        // bash script) stay link-only, as before.
+        const content = type === 'html' ? sandboxFiles.get(p) : undefined;
+        artifacts.push({ name, type, id: p, content });
       }
     } else if (c.name === 'artifacts') {
       // The Artifacts feature ("Claude Document"). Unlike present_files, the full
@@ -197,12 +202,57 @@ function artifactType(mime?: string): string | undefined {
   return mime.split('/').pop() || undefined;
 }
 
+/**
+ * Reconstructs the content of files Claude wrote in its sandbox by replaying the
+ * file-editing tools across the whole conversation in chronological order:
+ * `create_file` sets a path's text, `str_replace` patches it. This is the only
+ * in-conversation source for a generated file's bytes — `present_files` lists the
+ * paths but carries no content, and claude.ai's own "View" renders straight from
+ * this same tree data (no separate file fetch). Files produced another way (e.g. a
+ * bash script writing output) won't appear here, so they stay link-only.
+ *
+ * The map is conversation-global (last write per path wins). On the rare branched
+ * conversation that rewrites the same path differently per branch, a node could
+ * show another branch's version of that path — acceptable for a preview.
+ */
+function sandboxFileMap(conv: ApiConversation): Map<string, string> {
+  const files = new Map<string, string>();
+  const ordered = [...conv.chat_messages].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  for (const msg of ordered) {
+    for (const c of msg.content ?? []) {
+      if (c.type !== 'tool_use') continue;
+      const input = c.input ?? {};
+      if (c.name === 'create_file') {
+        const path = typeof input.path === 'string' ? input.path : null;
+        const text =
+          typeof input.file_text === 'string'
+            ? input.file_text
+            : typeof input.content === 'string'
+              ? input.content
+              : null;
+        if (path && text != null) files.set(path, text);
+      } else if (c.name === 'str_replace') {
+        const path = typeof input.path === 'string' ? input.path : null;
+        const oldStr = typeof input.old_str === 'string' ? input.old_str : null;
+        const newStr = typeof input.new_str === 'string' ? input.new_str : null;
+        if (path && oldStr != null && newStr != null && files.has(path)) {
+          files.set(path, files.get(path)!.replace(oldStr, newStr));
+        }
+      }
+    }
+  }
+  return files;
+}
+
 export function buildTree(conv: ApiConversation): BuiltTree {
   const byId = new Map<string, TreeNode>();
+  const sandboxFiles = sandboxFileMap(conv);
 
   for (const msg of conv.chat_messages) {
     const full = textOf(msg);
-    const preview = computeNodePreview(full, msg.content ?? [], msg.sender, mediaOf(msg));
+    const preview = computeNodePreview(full, msg.content ?? [], msg.sender, mediaOf(msg, sandboxFiles));
     byId.set(msg.uuid, {
       id: msg.uuid,
       parentId: msg.parent_message_uuid,

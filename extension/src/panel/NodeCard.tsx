@@ -3,6 +3,7 @@ import type { DisplayNode } from '../tree/displayTree';
 import { renderMarkdown } from './markdown';
 import { formatModelName } from './modelName';
 import type { ContentKind, ImageRef, WidgetRef, ArtifactRef, FileRef } from '../tree/contentKinds';
+import { isHtmlArtifact } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import {
   CodeIcon,
@@ -520,7 +521,7 @@ function Footer({
   return (
     <div className="cg-foot">
       <FileStrip files={files} onOpenMedia={onOpenMedia} />
-      <ArtifactStrip artifacts={artifacts} onOpenMedia={onOpenMedia} />
+      <ArtifactStrip artifacts={artifacts} hover={hover} onOpenMedia={onOpenMedia} />
       <ThumbStrip thumbs={thumbs} hover={hover} onOpenMedia={onOpenMedia} />
     </div>
   );
@@ -591,9 +592,11 @@ function collectArtifacts(p: NodePreview): ArtifactRef[] {
  *  document in a floating preview window; sandbox-only files stay static. */
 function ArtifactStrip({
   artifacts,
+  hover,
   onOpenMedia,
 }: {
   artifacts: ArtifactRef[];
+  hover: HoverApi;
   onOpenMedia?: (item: FooterItem) => void;
 }) {
   if (!artifacts.length) return null;
@@ -601,6 +604,8 @@ function ArtifactStrip({
     <div className="cg-artifacts">
       {artifacts.map((af, i) => {
         const clickable = !!(af.content && onOpenMedia);
+        // HTML artifacts get a live hover preview (rendered page), like widgets.
+        const html = isHtmlArtifact(af);
         return (
           <div
             key={i}
@@ -615,6 +620,16 @@ function ArtifactStrip({
                   }
                 : undefined
             }
+            onMouseEnter={
+              html
+                ? (e) =>
+                    hover.onPreview(
+                      { kind: 'html', html: af.content!, title: af.name },
+                      (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                    )
+                : undefined
+            }
+            onMouseLeave={html ? hover.onPreviewEnd : undefined}
           >
             <FileIcon size={12} />
             <span className="cg-artifact-name">{af.name}</span>

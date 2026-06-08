@@ -3,10 +3,12 @@ import type { WidgetRef } from '../tree/contentKinds';
 import { usePlatformUI } from './platformUI';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
 
-/** What a hover preview can show: a tool widget, or a full-size image. */
+/** What a hover preview can show: a tool widget, a full-size image, or a live
+ *  Claude HTML artifact (rendered in a sandboxed iframe, scripts disabled). */
 export type PreviewItem =
   | { kind: 'widget'; widget: WidgetRef }
-  | { kind: 'image'; src: string; title?: string };
+  | { kind: 'image'; src: string; title?: string }
+  | { kind: 'html'; html: string; title?: string };
 
 export type HoverPreviewProps = {
   item: PreviewItem;
@@ -36,6 +38,11 @@ export function HoverPreview({ item, anchor }: HoverPreviewProps) {
   if (item.kind === 'image') {
     title = item.title;
     body = <img className="cg-wpreview-img" src={item.src} alt={item.title || 'image'} />;
+  } else if (item.kind === 'html') {
+    // Live HTML artifact, scripts disabled — a quick static peek; the click
+    // preview enables scripts for the full interactive page.
+    title = item.title;
+    body = <iframe className="cg-wpreview-frame" sandbox="" srcDoc={item.html} title={item.title || 'HTML preview'} />;
   } else if (item.widget.isSvg) {
     title = item.widget.title;
     body = <img className="cg-wpreview-img" src={svgDataUri(item.widget.code)} alt={item.widget.title || 'visualization'} />;
