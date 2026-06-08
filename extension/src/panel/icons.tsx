@@ -157,15 +157,6 @@ export function ExpandIcon(p: IconProps) {
   );
 }
 
-/** Chevron-up glyph — folds an opened in-place preview back down to a compact node. */
-export function FoldIcon(p: IconProps) {
-  return (
-    <svg {...svgProps(p)}>
-      <polyline points="3.5 9 7 5.5 10.5 9" />
-    </svg>
-  );
-}
-
 /** Rounded-rectangle window glyph — opens a node's full-content in a floating window. */
 export function WindowIcon(p: IconProps) {
   return (

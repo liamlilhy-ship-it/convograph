@@ -524,9 +524,6 @@ export function GraphCanvas({
           proOptions={{ hideAttribution: true }}
           zoomOnScroll={false}
           zoomOnPinch
-          // Double-click is reserved for toggling a node's in-place preview, so
-          // don't also zoom the canvas on double-click.
-          zoomOnDoubleClick={false}
           panOnScroll
           onMove={handleMove}
           onMoveStart={handleMoveStart}

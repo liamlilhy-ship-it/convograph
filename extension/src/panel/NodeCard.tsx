@@ -12,7 +12,7 @@ import {
   FileIcon,
   UserIcon,
   RegenIcon,
-  FoldIcon,
+  ExpandIcon,
   WindowIcon,
   EditIcon,
   FollowUpIcon,
@@ -136,35 +136,17 @@ export function NodeCard({
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
       style={cardStyle}
-      // Click-to-jump lives on the role chip, so a plain card click is free.
-      // Double-click OPENS the in-place preview — but only from the collapsed
-      // state. In preview state double-click is left alone so text stays
-      // selectable; the leftmost fold button below is the only way to collapse.
-      onDoubleClick={
-        isPreview
-          ? undefined
-          : (e) => {
-              e.stopPropagation();
-              onTogglePreview(node);
-            }
-      }
+      // Single click jumps to this message. In preview mode the body is for
+      // reading, so the header row (below) becomes the jump target instead.
+      onClick={isPreview ? undefined : () => onClick(node)}
     >
-      <div className="cg-head">
-        <span
-          className="cg-role"
-          role="button"
-          aria-label="Jump to this message"
-          data-tip="Jump to this message"
-          // The "You"/assistant chip is now the click-to-jump target (in both the
-          // normal and preview states). stopPropagation so a chip double-click
-          // doesn't also fire the card's toggle-preview.
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick(node);
-          }}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
-          {isHuman ? <UserIcon size={13} /> : <AssistantIcon size={13} />}
+      <div
+        className="cg-head"
+        onClick={isPreview ? () => onClick(node) : undefined}
+        title={isPreview ? 'Jump to this message' : undefined}
+      >
+        <span className="cg-role">
+          {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
           {isHuman ? 'You' : assistantLabel}
         </span>
         {branch === 'regenerate' && (
@@ -178,22 +160,7 @@ export function NodeCard({
             {node.siblingIndex + 1}/{node.siblingCount}
           </span>
         )}
-        <div className="cg-head-actions" onDoubleClick={(e) => e.stopPropagation()}>
-          {/* Fold/collapse — leftmost of the action group, only while expanded. */}
-          {isPreview && (
-            <button
-              type="button"
-              className="cg-pv-btn cg-fold-btn"
-              data-tip="Collapse preview"
-              aria-label="Collapse preview"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePreview(node);
-              }}
-            >
-              <FoldIcon size={15} />
-            </button>
-          )}
+        <div className="cg-head-actions">
           {showActions &&
             (isHuman ? (
               <>
@@ -257,6 +224,20 @@ export function NodeCard({
             }}
           >
             <WindowIcon size={15} />
+          </button>
+          <button
+            type="button"
+            className="cg-pv-toggle"
+            data-active={isPreview ? 'true' : 'false'}
+            data-tip={isPreview ? 'Collapse preview' : 'Preview in place'}
+            aria-label={isPreview ? 'Collapse preview' : 'Preview in place'}
+            aria-pressed={isPreview ? 'true' : 'false'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePreview(node);
+            }}
+          >
+            <ExpandIcon size={15} />
           </button>
         </div>
       </div>

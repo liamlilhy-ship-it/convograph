@@ -227,15 +227,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  /* The role chip is the click-to-jump target — give it a clear hit area, a
-     pointer cursor, a hover affordance, and an anchor for its hover tooltip. */
-  position: relative;
-  cursor: pointer;
-  padding: 2px 5px;
-  border-radius: 6px;
-  transition: background 120ms ease;
 }
-.cg-node .cg-role:hover { background: var(--cg-accent-soft); }
 .cg-node[data-role="human"] .cg-role { color: var(--cg-accent); }
 .cg-node[data-role="assistant"] .cg-role { color: var(--cg-fg-muted); }
 .cg-node .cg-tag-regen {
@@ -773,7 +765,6 @@
    outside tooltip would be cut off) and fades in after a short ~200ms delay. */
 .cg-node .cg-pv-btn[data-tip]:hover::after,
 .cg-node .cg-pv-toggle[data-tip]:hover::after,
-.cg-node .cg-role[data-tip]:hover::after,
 .cg-toolbar button[data-tip]:hover::after,
 .react-flow__controls button[data-tip]:hover::after {
   content: attr(data-tip);
@@ -799,9 +790,6 @@
   opacity: 0;
   animation: cg-tip-in 90ms ease 200ms forwards;
 }
-/* The role chip sits at the header's LEFT, so open its tooltip rightward — the
-   shared rule anchors right:0, which would grow left and clip against the card. */
-.cg-node .cg-role[data-tip]:hover::after { left: 0; right: auto; }
 @keyframes cg-tip-in {
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1000,8 +988,8 @@
    keeps overflow:hidden so the inner body owns the scroll. */
 .cg-node[data-preview="true"] { cursor: default; }
 .cg-node[data-preview="true"]:hover { transform: none; }
-/* Jump is on the role chip now (in both normal and preview states), so the
-   header row is no longer a click target. */
+/* …but the header row stays a jump target (the body is for reading). */
+.cg-node[data-preview="true"] .cg-head { cursor: pointer; }
 
 /* Floating window chrome */
 .cg-pv-window {
