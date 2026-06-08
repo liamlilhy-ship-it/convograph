@@ -12,7 +12,6 @@ import {
   FileIcon,
   UserIcon,
   RegenIcon,
-  ExpandIcon,
   WindowIcon,
   EditIcon,
   FollowUpIcon,
@@ -136,17 +135,29 @@ export function NodeCard({
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
       style={cardStyle}
-      onClick={isPreview ? undefined : () => onClick(node)}
+      // Click-to-jump moved to the role chip below, so a plain card click is free:
+      // double-click anywhere on the card toggles the in-place preview open/closed.
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onTogglePreview(node);
+      }}
     >
-      <div
-        className="cg-head"
-        // In preview mode the body is for reading (no card-level jump), so the
-        // header row becomes the click-to-jump target instead.
-        onClick={isPreview ? () => onClick(node) : undefined}
-        title={isPreview ? 'Jump to this message' : undefined}
-      >
-        <span className="cg-role">
-          {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
+      <div className="cg-head">
+        <span
+          className="cg-role"
+          role="button"
+          aria-label="Jump to this message"
+          data-tip="Jump to this message"
+          // The "You"/assistant chip is now the click-to-jump target (in both the
+          // normal and preview states). stopPropagation so a chip double-click
+          // doesn't also fire the card's toggle-preview.
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick(node);
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {isHuman ? <UserIcon size={13} /> : <AssistantIcon size={13} />}
           {isHuman ? 'You' : assistantLabel}
         </span>
         {branch === 'regenerate' && (
@@ -160,7 +171,7 @@ export function NodeCard({
             {node.siblingIndex + 1}/{node.siblingCount}
           </span>
         )}
-        <div className="cg-head-actions">
+        <div className="cg-head-actions" onDoubleClick={(e) => e.stopPropagation()}>
           {showActions &&
             (isHuman ? (
               <>
@@ -178,7 +189,7 @@ export function NodeCard({
                     onStartEdit(node);
                   }}
                 >
-                  <EditIcon size={12} />
+                  <EditIcon size={15} />
                 </button>
                 {canRegenerate && (
                   <button
@@ -193,7 +204,7 @@ export function NodeCard({
                       onRegenerate(node);
                     }}
                   >
-                    <RegenIcon size={12} />
+                    <RegenIcon size={15} />
                   </button>
                 )}
               </>
@@ -210,7 +221,7 @@ export function NodeCard({
                   onStartFollowup(node);
                 }}
               >
-                <FollowUpIcon size={12} />
+                <FollowUpIcon size={15} />
               </button>
             ))}
           <button
@@ -223,21 +234,7 @@ export function NodeCard({
               onOpenPreview(node);
             }}
           >
-            <WindowIcon size={12} />
-          </button>
-          <button
-            type="button"
-            className="cg-pv-toggle"
-            data-active={isPreview ? 'true' : 'false'}
-            data-tip={isPreview ? 'Collapse preview' : 'Preview in place'}
-            aria-label={isPreview ? 'Collapse preview' : 'Preview in place'}
-            aria-pressed={isPreview ? 'true' : 'false'}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTogglePreview(node);
-            }}
-          >
-            <ExpandIcon size={12} />
+            <WindowIcon size={15} />
           </button>
         </div>
       </div>
