@@ -28,11 +28,6 @@ export function HoverPreview({ item, anchor }: HoverPreviewProps) {
     return <FitImageHover src={item.src} title={item.title} anchor={anchor} />;
   }
 
-  const PAD = 8;
-  const W = 460;
-  const left = Math.min(window.innerWidth - W - PAD, anchor.right + PAD);
-  const top = Math.min(window.innerHeight - 380, anchor.top);
-
   let body: JSX.Element;
   let title: string | undefined;
   if (item.kind === 'image') {
@@ -53,8 +48,56 @@ export function HoverPreview({ item, anchor }: HoverPreviewProps) {
     );
   }
 
+  return <BoxHover title={title} body={body} anchor={anchor} />;
+}
+
+/** Fixed-width hover box (widget, Claude image, or HTML artifact). */
+const BOX_W = 460;
+
+/**
+ * Places the fixed-size hover box by quadrant — the same logic as FitImageHover —
+ * so it opens AWAY from the anchor toward the larger free space (a node in the
+ * bottom-right shows its preview up-and-to-the-left). Measured after render and
+ * clamped to the viewport so no edge is ever truncated. (Previously the box always
+ * opened lower-right and got clamped on top of a corner node / cut off.)
+ */
+function BoxHover({ title, body, anchor }: { title?: string; body: JSX.Element; anchor: DOMRect }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const PAD = 12;
+    const place = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const { width: w, height: h } = el.getBoundingClientRect();
+      const openLeft = anchor.left + anchor.width / 2 > vw / 2;
+      const openUp = anchor.top + anchor.height / 2 > vh / 2;
+      let left = openLeft ? anchor.left - PAD - w : anchor.right + PAD;
+      let top = openUp ? anchor.bottom - h : anchor.top;
+      left = Math.max(PAD, Math.min(left, vw - w - PAD));
+      top = Math.max(PAD, Math.min(top, vh - h - PAD));
+      setPos({ left, top });
+    };
+    place();
+    // An <img> body changes the box height once it loads — re-place then.
+    const img = el.querySelector('img');
+    if (img && !img.complete) {
+      img.addEventListener('load', place, { once: true });
+      return () => img.removeEventListener('load', place);
+    }
+    return;
+  }, [anchor, title]);
+
+  // Render off-screen until measured so it never flashes at the wrong spot.
   return (
-    <div className="cg-wpreview" style={{ left, top, width: W }}>
+    <div
+      ref={ref}
+      className="cg-wpreview"
+      style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: BOX_W, visibility: pos ? 'visible' : 'hidden' }}
+    >
       {title && <div className="cg-wpreview-title">{title}</div>}
       {body}
     </div>
