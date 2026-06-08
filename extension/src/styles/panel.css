@@ -38,7 +38,7 @@
 .cg-toggle[data-on="true"] { background: var(--cg-accent); color: white; border-color: var(--cg-accent); }
 .cg-toggle .cg-dot {
   width: 7px; height: 7px; border-radius: 50%;
-  background: var(--cg-fg-muted);
+  background: var(--cg-accent);
 }
 .cg-toggle[data-on="true"] .cg-dot { background: white; }
 

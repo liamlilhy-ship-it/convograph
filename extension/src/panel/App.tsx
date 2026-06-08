@@ -690,7 +690,7 @@ export function App({ platform }: { platform: Platform }) {
         aria-hidden={open}
       >
         <span className="cg-dot" />
-        Graph
+        Convograph
       </button>
       {open && (
         <aside
