@@ -9,6 +9,7 @@ import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
 import { revealNodeViaRail } from './promptRail';
 import { createCompletion, retryCompletion } from './writes';
 import { chatgptDom } from './dom';
+import { resolveTheme } from '../theme';
 import tokensCss from './tokens.css?inline';
 
 /**
@@ -20,10 +21,7 @@ import tokensCss from './tokens.css?inline';
  */
 
 function detectTheme(): ThemeName {
-  const cls = document.documentElement.className;
-  if (/\bdark\b/.test(cls)) return 'dark';
-  if (/\blight\b/.test(cls)) return 'light';
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return resolveTheme();
 }
 
 // ChatGPT sizes its UI off the VIEWPORT, not the document flow: the shell that

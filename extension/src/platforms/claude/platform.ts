@@ -2,6 +2,7 @@ import type { Platform, ThemeName } from '../types';
 import { getOrgId, getConversationTree, setCurrentLeaf, parseConversationIdFromUrl } from './client';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './chatClient';
 import { claudeDom } from './dom';
+import { resolveTheme } from '../theme';
 import tokensCss from './tokens.css?inline';
 
 /**
@@ -26,13 +27,11 @@ function orgId(): Promise<string> {
   return orgIdPromise;
 }
 
+// claude.ai signals dark mode only via `color-scheme` / a dark background (its
+// <html> carries a named `data-theme="claude"`, not a dark/light token), so the
+// shared resolver — not a class check — is what gets this right. See ../theme.ts.
 function detectTheme(): ThemeName {
-  const ds = document.documentElement.dataset.theme;
-  if (ds === 'dark' || ds === 'light') return ds;
-  const cls = document.documentElement.className;
-  if (/\bdark\b/.test(cls)) return 'dark';
-  if (/\blight\b/.test(cls)) return 'light';
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return resolveTheme();
 }
 
 // Make room for the side panel by padding the document element — claude.ai's

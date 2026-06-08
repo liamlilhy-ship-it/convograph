@@ -11,8 +11,13 @@ const HOST_ID = 'conversation-graph-for-claude-host';
 function syncTheme(host: HTMLElement, platform: Platform) {
   const apply = () => host.dataset.theme = platform.detectTheme();
   apply();
+  // Re-detect on any signal a site might flip when switching theme: the class /
+  // data-theme token, or an inline style that changes `color-scheme` (claude.ai),
+  // on either <html> or <body>. Plus the OS preference for "system" themes.
   const mo = new MutationObserver(apply);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+  const opts = { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] };
+  mo.observe(document.documentElement, opts);
+  if (document.body) mo.observe(document.body, opts);
   const mm = window.matchMedia?.('(prefers-color-scheme: dark)');
   mm?.addEventListener?.('change', apply);
 }
