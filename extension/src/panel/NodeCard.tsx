@@ -12,6 +12,7 @@ import {
   FileIcon,
   UserIcon,
   RegenIcon,
+  FoldIcon,
   WindowIcon,
   EditIcon,
   FollowUpIcon,
@@ -135,12 +136,18 @@ export function NodeCard({
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
       style={cardStyle}
-      // Click-to-jump moved to the role chip below, so a plain card click is free:
-      // double-click anywhere on the card toggles the in-place preview open/closed.
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onTogglePreview(node);
-      }}
+      // Click-to-jump lives on the role chip, so a plain card click is free.
+      // Double-click OPENS the in-place preview — but only from the collapsed
+      // state. In preview state double-click is left alone so text stays
+      // selectable; the leftmost fold button below is the only way to collapse.
+      onDoubleClick={
+        isPreview
+          ? undefined
+          : (e) => {
+              e.stopPropagation();
+              onTogglePreview(node);
+            }
+      }
     >
       <div className="cg-head">
         <span
@@ -172,6 +179,21 @@ export function NodeCard({
           </span>
         )}
         <div className="cg-head-actions" onDoubleClick={(e) => e.stopPropagation()}>
+          {/* Fold/collapse — leftmost of the action group, only while expanded. */}
+          {isPreview && (
+            <button
+              type="button"
+              className="cg-pv-btn cg-fold-btn"
+              data-tip="Collapse preview"
+              aria-label="Collapse preview"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePreview(node);
+              }}
+            >
+              <FoldIcon size={15} />
+            </button>
+          )}
           {showActions &&
             (isHuman ? (
               <>
@@ -240,7 +262,7 @@ export function NodeCard({
       </div>
       {isPreview ? (
         <div className="cg-node-pv-body nowheel nopan">
-          <FullPreview node={node} />
+          <FullPreview node={node} onOpenMedia={onOpenMedia} />
         </div>
       ) : (
         <>

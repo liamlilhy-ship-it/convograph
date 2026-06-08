@@ -782,6 +782,7 @@ export function App({ platform }: { platform: Platform }) {
           onClose={closePreview}
           onFocus={focusPreview}
           onGeometry={setPreviewGeometry}
+          onOpenMedia={openMedia}
         />
       )}
     </PlatformUIProvider>

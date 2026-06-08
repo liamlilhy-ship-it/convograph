@@ -6,6 +6,7 @@ import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
 import { UserIcon, FileIcon, ImageIcon, AttachmentIcon } from './icons';
 import { usePlatformUI } from './platformUI';
+import type { FooterItem } from './NodeCard';
 
 /** A generated document (Artifacts feature) opened in its own window. Carries the
  *  full inline text so it renders without touching claude's native preview. */
@@ -49,11 +50,14 @@ type PreviewLayerProps = {
   onClose: (key: string) => void;
   onFocus: (key: string) => void;
   onGeometry: (key: string, geo: Geometry) => void;
+  /** Open a footer attachment from inside a node's full preview (e.g. a clickable
+   *  generated document) in its own floating window. */
+  onOpenMedia?: (item: FooterItem) => void;
 };
 
 /** Renders all open preview windows over the page (children of the pointer-events:none
  *  root; each window re-enables pointer events). */
-export function PreviewLayer({ previews, fontPx, onFontPx, onClose, onFocus, onGeometry }: PreviewLayerProps) {
+export function PreviewLayer({ previews, fontPx, onFontPx, onClose, onFocus, onGeometry, onOpenMedia }: PreviewLayerProps) {
   return (
     <>
       {previews.map((pv) => (
@@ -65,6 +69,7 @@ export function PreviewLayer({ previews, fontPx, onFontPx, onClose, onFocus, onG
           onClose={onClose}
           onFocus={onFocus}
           onGeometry={onGeometry}
+          onOpenMedia={onOpenMedia}
         />
       ))}
     </>
@@ -78,6 +83,7 @@ function PreviewWindow({
   onClose,
   onFocus,
   onGeometry,
+  onOpenMedia,
 }: {
   pv: OpenPreview;
   fontPx: number;
@@ -85,6 +91,7 @@ function PreviewWindow({
   onClose: (key: string) => void;
   onFocus: (key: string) => void;
   onGeometry: (key: string, geo: Geometry) => void;
+  onOpenMedia?: (item: FooterItem) => void;
 }) {
   const { key, x, y, w, h } = pv;
   // While dragging/resizing we lay a full-viewport mask so the cursor can't fall
@@ -143,7 +150,7 @@ function PreviewWindow({
   );
 
   const { AssistantIcon } = usePlatformUI();
-  const { icon, title, body, showFontCtl } = renderParts(pv, AssistantIcon);
+  const { icon, title, body, showFontCtl } = renderParts(pv, AssistantIcon, onOpenMedia);
 
   return (
     <>
@@ -212,6 +219,7 @@ function PreviewWindow({
 function renderParts(
   pv: OpenPreview,
   AssistantIcon: (p: { size?: number }) => ReactNode,
+  onOpenMedia?: (item: FooterItem) => void,
 ): {
   icon: ReactNode;
   title: string;
@@ -224,7 +232,7 @@ function renderParts(
       return {
         icon: isHuman ? <UserIcon size={11} /> : <AssistantIcon size={11} />,
         title: pv.node.preview.title || (isHuman ? 'Question' : 'Answer'),
-        body: <FullPreview node={pv.node} />,
+        body: <FullPreview node={pv.node} onOpenMedia={onOpenMedia} />,
         showFontCtl: true,
       };
     }

@@ -6,6 +6,7 @@ import { renderMarkdown } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
 import { UserIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
 import { usePlatformUI } from './platformUI';
+import type { FooterItem } from './NodeCard';
 
 /** Typed lookup for the (at most one) kind of a given tag in a preview. */
 function kindOf<K extends ContentKind['kind']>(
@@ -22,7 +23,16 @@ function kindOf<K extends ContentKind['kind']>(
  * for any node regardless of whether it's on the active branch. All text is real,
  * selectable DOM (copy-pasteable).
  */
-export function FullPreview({ node }: { node: DisplayNode }) {
+export function FullPreview({
+  node,
+  onOpenMedia,
+}: {
+  node: DisplayNode;
+  /** Open a clickable generated document (artifact with inline content) in a
+   *  floating window — keeps artifacts clickable in the preview states, matching
+   *  the collapsed node footer. */
+  onOpenMedia?: (item: FooterItem) => void;
+}) {
   const { assistantLabel, AssistantIcon } = usePlatformUI();
   const isHuman = node.role === 'human';
   const p = node.preview;
@@ -91,7 +101,15 @@ export function FullPreview({ node }: { node: DisplayNode }) {
                 href={src}
                 target="_blank"
                 rel="noreferrer noopener"
-                title={im.name || 'image'}
+                title={onOpenMedia ? `Open ${im.name || 'image'}` : im.name || 'image'}
+                // Plain click → floating image preview (matches the node footer);
+                // cmd/ctrl/shift-click falls through to opening the original in a tab.
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || !onOpenMedia) return;
+                  e.preventDefault();
+                  onOpenMedia({ kind: 'image', image: im });
+                }}
               >
                 <img src={src} alt={im.name || ''} loading="lazy" />
               </a>
@@ -104,13 +122,29 @@ export function FullPreview({ node }: { node: DisplayNode }) {
         <div className="cg-pv-section">
           <div className="cg-pv-section-label">Generated files</div>
           <div className="cg-artifacts">
-            {artifacts.map((af, i) => (
-              <div key={i} className="cg-artifact" title={af.name}>
-                <FileIcon size={12} />
-                <span className="cg-artifact-name">{af.name}</span>
-                {af.type && <span className="cg-muted cg-artifact-type">{af.type.toUpperCase()}</span>}
-              </div>
-            ))}
+            {artifacts.map((af, i) => {
+              const clickable = !!(af.content && onOpenMedia);
+              return (
+                <div
+                  key={i}
+                  className="cg-artifact"
+                  data-clickable={clickable ? 'true' : undefined}
+                  title={clickable ? `Open ${af.name}` : af.name}
+                  onClick={
+                    clickable
+                      ? (e) => {
+                          e.stopPropagation();
+                          onOpenMedia!({ kind: 'artifact', artifact: af });
+                        }
+                      : undefined
+                  }
+                >
+                  <FileIcon size={12} />
+                  <span className="cg-artifact-name">{af.name}</span>
+                  {af.type && <span className="cg-muted cg-artifact-type">{af.type.toUpperCase()}</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -119,13 +153,29 @@ export function FullPreview({ node }: { node: DisplayNode }) {
         <div className="cg-pv-section">
           <div className="cg-pv-section-label">Attachments</div>
           <div className="cg-files">
-            {files.map((f, i) => (
-              <div key={i} className="cg-file" title={f.name}>
-                <AttachmentIcon size={12} />
-                <span className="cg-file-name">{f.name}</span>
-                {f.type && <span className="cg-muted cg-file-meta">{f.type.toUpperCase()}</span>}
-              </div>
-            ))}
+            {files.map((f, i) => {
+              const clickable = !!((f.content || f.url) && onOpenMedia);
+              return (
+                <div
+                  key={i}
+                  className="cg-file"
+                  data-clickable={clickable ? 'true' : undefined}
+                  title={clickable ? `Open ${f.name}` : f.name}
+                  onClick={
+                    clickable
+                      ? (e) => {
+                          e.stopPropagation();
+                          onOpenMedia!({ kind: 'file', file: f });
+                        }
+                      : undefined
+                  }
+                >
+                  <AttachmentIcon size={12} />
+                  <span className="cg-file-name">{f.name}</span>
+                  {f.type && <span className="cg-muted cg-file-meta">{f.type.toUpperCase()}</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
