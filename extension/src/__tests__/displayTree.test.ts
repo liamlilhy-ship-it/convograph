@@ -5,6 +5,7 @@ import linear from './fixtures/linear.json';
 import singleEdit from './fixtures/single-edit.json';
 import regenerate from './fixtures/regenerate.json';
 import nested from './fixtures/nested.json';
+import assistantChain from './fixtures/assistant-chain.json';
 import type { ApiConversation } from '../platforms/model';
 
 const build = (fixture: unknown) => buildDisplayTree(buildTree(fixture as ApiConversation));
@@ -193,5 +194,52 @@ describe('buildDisplayTree — message uuids for completion targets', () => {
     expect(dogs3.humanId).toBe('h2b');
     expect(dogs3.assistantId).toBe('a3');
     expect(dogs3.questionParentId).toBe('a1');
+  });
+});
+
+describe('buildDisplayTree — multi-step answer (consecutive assistant messages)', () => {
+  it('collapses an assistant chain into one answer and keeps the next turn attached', () => {
+    const dt = build(assistantChain);
+    // assistant-chain.json: h1 → a1 → a2 → a3 (one 3-step answer) → h2 → a4
+    // The answer node is keyed by the chain HEAD (a1); a2/a3 are NOT separate nodes.
+    expect(dt.byId.size).toBe(4);
+
+    const q1 = dt.byId.get(qid('h1', 'a1'))!;
+    const a1 = dt.byId.get(aid('h1', 'a1'))!;
+    const q2 = dt.byId.get(qid('h2', 'a4'))!;
+    const a2 = dt.byId.get(aid('h2', 'a4'))!;
+    expect([q1, a1, q2, a2].every(Boolean)).toBe(true);
+    // mid-answer steps a2/a3 produced no nodes of their own
+    expect(dt.byId.has(aid('h1', 'a2'))).toBe(false);
+    expect(dt.byId.has(aid('h1', 'a3'))).toBe(false);
+
+    // Snippet comes from the LAST step (final prose), not the "Let me examine…" preamble.
+    expect(a1.preview.title).toContain('finished slide');
+    expect(a1.preview.title).not.toContain('examine the template');
+
+    // Nothing dropped: full text + bodies merge every step in document order.
+    expect(a1.fullText).toContain('Let me examine the template.');
+    expect(a1.fullText).toContain('Now refining the layout.');
+    expect(a1.fullText).toContain('Here is the finished slide.');
+    expect(a1.body.map((b) => (b.kind === 'md' ? b.text : '[widget]'))).toEqual([
+      'Let me examine the template.',
+      'Now refining the layout.',
+      'Here is the finished slide.',
+    ]);
+
+    // Follow-up parents off the TAIL message (a3); leaf resolves past it to a4.
+    expect(a1.assistantId).toBe('a3');
+    expect(a1.leafId).toBe('a4');
+
+    // THE FIX: the next question is wired to the answer — not detached as a spurious
+    // root — even though it hangs off the chain's tail (whose parent is an assistant).
+    expect(q2.parentId).toBe(a1.id);
+    expect(a1.childIds).toEqual([q2.id]);
+    expect(dt.roots.map((r) => r.id)).toEqual([q1.id]); // exactly one root
+
+    // Depths + active path stay clean Q(0)→A(1)→Q(2)→A(3).
+    expect([q1.depth, a1.depth, q2.depth, a2.depth]).toEqual([0, 1, 2, 3]);
+    expect(dt.activePath).toEqual([q1.id, a1.id, q2.id, a2.id]);
+    expect([q1, a1, q2, a2].every((n) => n.isOnActivePath)).toBe(true);
   });
 });

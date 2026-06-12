@@ -59,10 +59,14 @@ function textOf(msg: ApiMessage): string {
  * assigned answer-wide (first-seen url keeps its number across the whole message).
  */
 function bodyOf(msg: ApiMessage): PreviewBlock[] {
+  // Join a message's text blocks with a blank line so each block — e.g. the separate
+  // "Let me…" narration steps an agentic answer emits between tool calls — starts on
+  // its own line rather than running together as one soft-wrapped paragraph.
+  const SEP = '\n\n';
   const blocks: PreviewBlock[] = [];
   const urlToNum = new Map<string, number>(); // answer-wide footnote numbering
   let run: string[] = [];
-  let rawLen = 0; // length of run.join('\n') so far
+  let rawLen = 0; // length of run.join(SEP) so far
   let runCitations: BlockCitation[] = []; // ends in raw-join coordinates
 
   const refOf = (c: NormalizedCitation): CitationRef => {
@@ -78,7 +82,7 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
   };
 
   const flush = () => {
-    const raw = run.join('\n');
+    const raw = run.join(SEP);
     const text = raw.trim();
     if (text) {
       const leadingTrim = raw.length - raw.trimStart().length;
@@ -96,7 +100,7 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
   for (const c of msg.content ?? []) {
     if (c.type === 'text') {
       if (!c.text) continue;
-      const base = run.length === 0 ? 0 : rawLen + 1; // +1 for the '\n' separator
+      const base = run.length === 0 ? 0 : rawLen + SEP.length; // + separator before this block
       for (const cit of c.citations ?? []) {
         if (typeof cit.url !== 'string' || typeof cit.end_index !== 'number') continue;
         runCitations.push({ end: base + cit.end_index, ref: refOf(cit) });

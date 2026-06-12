@@ -195,13 +195,41 @@ describe('buildTree', () => {
     const md = body[0]!;
     expect(md.kind).toBe('md');
     if (md.kind !== 'md') return;
-    expect(md.text).toBe('Alpha beta.\nGamma delta.'); // 11 + 1 + 12 = 24
+    expect(md.text).toBe('Alpha beta.\n\nGamma delta.'); // 11 + 2 (blank-line sep) + 12 = 25
     expect(md.citations).toBeDefined();
     expect(md.citations).toHaveLength(2);
     // first block citation: end == 11 (end of "Alpha beta."), number 1, titled by site_name
     expect(md.citations![0]).toMatchObject({ end: 11, ref: { n: 1, url: 'https://a.example/x', title: 'A Site' } });
-    // second block citation: rebased to base(12) + 12 = 24, number 2, title falls back to host
-    expect(md.citations![1]).toMatchObject({ end: 24, ref: { n: 2, url: 'https://b.example/y', title: 'b.example' } });
+    // second block citation: rebased to base(13) + 12 = 25, number 2, title falls back to host
+    expect(md.citations![1]).toMatchObject({ end: 25, ref: { n: 2, url: 'https://b.example/y', title: 'b.example' } });
+  });
+
+  it("separates an agentic answer's text blocks (split by tool calls) into their own paragraphs", () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-06-08T10:00:00Z',
+          content: [
+            { type: 'text', text: 'Let me check the code.' },
+            { type: 'tool_use', name: 'bash_tool', input: {} },
+            { type: 'text', text: 'Now let me update it.' },
+            { type: 'tool_use', name: 'view', input: {} },
+            { type: 'text', text: 'Done.' },
+          ],
+        },
+      ],
+    };
+    const body = buildTree(conv).byId.get('a1')!.body;
+    expect(body).toHaveLength(1); // still ONE md block (non-widget tools don't flush)
+    const md = body[0]!;
+    // …but each narration step is its own paragraph (blank-line separated), so it
+    // starts on a new line instead of soft-wrapping into one run-on paragraph.
+    expect(md.kind === 'md' && md.text).toBe('Let me check the code.\n\nNow let me update it.\n\nDone.');
   });
 
   it('reuses one footnote number for repeated urls and omits citations when there are none', () => {

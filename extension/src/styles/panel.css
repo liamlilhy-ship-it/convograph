@@ -1146,6 +1146,11 @@
 }
 .cg-pv-md > :first-child { margin-top: 0; }
 .cg-pv-md > :last-child { margin-bottom: 0; }
+/* A multi-step answer merges each step into its own md block; within one message
+   text never yields two adjacent md blocks (widgets separate them), so this lands
+   exactly on step boundaries — each step just starts on a new line (paragraph
+   rhythm, not a full blank line). */
+.cg-pv-md + .cg-pv-md { margin-top: 0.6em; }
 .cg-pv-md h1, .cg-pv-md h2, .cg-pv-md h3, .cg-pv-md h4 { line-height: 1.3; margin: 1.1em 0 0.5em; }
 .cg-pv-md h1 { font-size: 1.5em; }
 .cg-pv-md h2 { font-size: 1.3em; }
