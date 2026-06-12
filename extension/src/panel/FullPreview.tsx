@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import type { ContentKind, ImageRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
-import { renderMarkdown } from './markdown';
+import { renderMarkdown, renderMarkdownWithCitations } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
 import { UserIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
 import { usePlatformUI } from './platformUI';
@@ -42,7 +42,14 @@ export function FullPreview({
   const body = useMemo(
     () =>
       node.body.map((b) =>
-        b.kind === 'md' ? { kind: 'md' as const, html: renderMarkdown(b.text) } : b,
+        b.kind === 'md'
+          ? {
+              kind: 'md' as const,
+              html: b.citations?.length
+                ? renderMarkdownWithCitations(b.text, b.citations)
+                : renderMarkdown(b.text),
+            }
+          : b,
       ),
     [node.body],
   );

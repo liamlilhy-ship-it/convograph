@@ -159,6 +159,88 @@ describe('buildTree', () => {
     expect(kinds.some((k) => k.kind === 'artifact')).toBe(false);
   });
 
+  it('rebases text-block citations onto the coalesced md block and numbers them answer-wide', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-06-08T10:00:00Z',
+          content: [
+            // "Alpha beta." (len 11), cited at its end → url a
+            {
+              type: 'text',
+              text: 'Alpha beta.',
+              citations: [
+                { url: 'https://a.example/x', end_index: 11, metadata: { site_name: 'A Site' } },
+              ],
+            },
+            // a non-widget tool_use does NOT flush, so the two text blocks coalesce
+            { type: 'tool_use', name: 'web_search', input: { query: 'x' } },
+            // "Gamma delta." (len 12), cited at its end → url b (no title/site → host)
+            {
+              type: 'text',
+              text: 'Gamma delta.',
+              citations: [{ url: 'https://b.example/y', end_index: 12 }],
+            },
+          ],
+        },
+      ],
+    };
+    const body = buildTree(conv).byId.get('a1')!.body;
+    expect(body).toHaveLength(1);
+    const md = body[0]!;
+    expect(md.kind).toBe('md');
+    if (md.kind !== 'md') return;
+    expect(md.text).toBe('Alpha beta.\nGamma delta.'); // 11 + 1 + 12 = 24
+    expect(md.citations).toBeDefined();
+    expect(md.citations).toHaveLength(2);
+    // first block citation: end == 11 (end of "Alpha beta."), number 1, titled by site_name
+    expect(md.citations![0]).toMatchObject({ end: 11, ref: { n: 1, url: 'https://a.example/x', title: 'A Site' } });
+    // second block citation: rebased to base(12) + 12 = 24, number 2, title falls back to host
+    expect(md.citations![1]).toMatchObject({ end: 24, ref: { n: 2, url: 'https://b.example/y', title: 'b.example' } });
+  });
+
+  it('reuses one footnote number for repeated urls and omits citations when there are none', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a2',
+      chat_messages: [
+        {
+          uuid: 'a2',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-06-08T10:00:00Z',
+          content: [
+            {
+              type: 'text',
+              text: 'See one. See two.',
+              citations: [
+                { url: 'https://same.example/p', end_index: 8 }, // after "See one."
+                { url: 'https://same.example/p', end_index: 17 }, // after "See two." → same url
+              ],
+            },
+          ],
+        },
+        {
+          uuid: 'a3',
+          parent_message_uuid: 'a2',
+          sender: 'assistant',
+          created_at: '2026-06-08T10:01:00Z',
+          content: [{ type: 'text', text: 'No sources here.' }],
+        },
+      ],
+    };
+    const t = buildTree(conv);
+    const cited = t.byId.get('a2')!.body[0]!;
+    expect(cited.kind === 'md' && cited.citations?.map((b) => b.ref.n)).toEqual([1, 1]);
+    const plain = t.byId.get('a3')!.body[0]!;
+    expect(plain.kind === 'md' && plain.citations).toBeUndefined();
+  });
+
   it('reads claude.ai legacy `files` shape (uuid key, file_kind image/blob, size_bytes)', () => {
     const conv: ApiConversation = {
       uuid: 'c',

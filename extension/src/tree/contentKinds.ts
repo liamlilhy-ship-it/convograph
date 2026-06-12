@@ -50,14 +50,33 @@ export type ContentKind =
   | { kind: 'artifact'; count: number; items: ArtifactRef[] };
 
 /**
+ * A web source Claude cited in an answer (claude.ai's `text`-block citations).
+ * Rendered as an inline reference chip right after the cited phrase. `n` is the
+ * answer-wide footnote number (same url reuses its number).
+ */
+export type CitationRef = {
+  n: number;
+  title: string;
+  url: string;
+  siteName?: string;
+  siteDomain?: string;
+  faviconUrl?: string;
+};
+
+/** A citation anchored within an md block: `end` is the char offset into that
+ *  block's (coalesced) text where the reference chip is inserted. */
+export type BlockCitation = { end: number; ref: CitationRef };
+
+/**
  * One block of a message body, in original document order — produced by walking
  * the message's content array. A `md` block is a run of markdown text; a `widget`
  * block is a tool-rendered visualization sitting exactly where it appeared inline.
  * The full preview renders these in sequence so widgets land in place rather than
- * being grouped after all the text.
+ * being grouped after all the text. An md block may carry `citations` — inline
+ * reference chips inserted at their `end` offsets when rendered.
  */
 export type PreviewBlock =
-  | { kind: 'md'; text: string }
+  | { kind: 'md'; text: string; citations?: BlockCitation[] }
   | { kind: 'widget'; widget: WidgetRef };
 
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
