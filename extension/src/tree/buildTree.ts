@@ -1,6 +1,15 @@
-import type { ApiConversation, ApiMessage } from '../platforms/model';
+import type { ApiConversation, ApiMessage, NormalizedCitation } from '../platforms/model';
 import { computeNodePreview, type NodePreview } from './preview';
-import type { ImageRef, FileRef, WidgetRef, ArtifactRef, MediaRefs, PreviewBlock } from './contentKinds';
+import type {
+  ImageRef,
+  FileRef,
+  WidgetRef,
+  ArtifactRef,
+  MediaRefs,
+  PreviewBlock,
+  CitationRef,
+  BlockCitation,
+} from './contentKinds';
 
 export type TreeNode = {
   id: string;
@@ -42,18 +51,58 @@ function textOf(msg: ApiMessage): string {
  * between the text. (Images live in the file arrays with no inline anchor, and
  * `present_files`/`create_file` are end-of-message artifacts — both are rendered
  * as trailing sections by the preview, not woven into the body.)
+ *
+ * Web citations (claude.ai's per-`text`-block `citations[]`) ride along on the md
+ * block: each becomes a `BlockCitation` whose `end` offset is rebased from the
+ * source block into the coalesced (and trimmed) run text, so the preview can drop
+ * an inline reference chip right after the cited phrase. Footnote numbers are
+ * assigned answer-wide (first-seen url keeps its number across the whole message).
  */
 function bodyOf(msg: ApiMessage): PreviewBlock[] {
   const blocks: PreviewBlock[] = [];
+  const urlToNum = new Map<string, number>(); // answer-wide footnote numbering
   let run: string[] = [];
-  const flush = () => {
-    const t = run.join('\n').trim();
-    if (t) blocks.push({ kind: 'md', text: t });
-    run = [];
+  let rawLen = 0; // length of run.join('\n') so far
+  let runCitations: BlockCitation[] = []; // ends in raw-join coordinates
+
+  const refOf = (c: NormalizedCitation): CitationRef => {
+    const url = c.url!;
+    let n = urlToNum.get(url);
+    if (n == null) {
+      n = urlToNum.size + 1;
+      urlToNum.set(url, n);
+    }
+    const md = c.metadata ?? {};
+    const title = c.title?.trim() || md.site_name || hostOf(url);
+    return { n, title, url, siteName: md.site_name, siteDomain: md.site_domain, faviconUrl: md.favicon_url };
   };
+
+  const flush = () => {
+    const raw = run.join('\n');
+    const text = raw.trim();
+    if (text) {
+      const leadingTrim = raw.length - raw.trimStart().length;
+      const citations = runCitations
+        .map((bc) => ({ end: bc.end - leadingTrim, ref: bc.ref }))
+        .filter((bc) => bc.end >= 0 && bc.end <= text.length)
+        .sort((a, b) => a.end - b.end);
+      blocks.push(citations.length ? { kind: 'md', text, citations } : { kind: 'md', text });
+    }
+    run = [];
+    rawLen = 0;
+    runCitations = [];
+  };
+
   for (const c of msg.content ?? []) {
     if (c.type === 'text') {
-      if (c.text) run.push(c.text);
+      if (!c.text) continue;
+      const base = run.length === 0 ? 0 : rawLen + 1; // +1 for the '\n' separator
+      for (const cit of c.citations ?? []) {
+        if (typeof cit.url !== 'string' || typeof cit.end_index !== 'number') continue;
+        runCitations.push({ end: base + cit.end_index, ref: refOf(cit) });
+      }
+      run.push(c.text);
+      rawLen = base + c.text.length;
     } else if (c.type === 'tool_use' && c.name === 'visualize:show_widget') {
       const code = typeof c.input?.widget_code === 'string' ? c.input.widget_code : '';
       if (!code) continue;
@@ -64,6 +113,12 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
   }
   flush();
   return blocks;
+}
+
+/** Bare hostname of a URL (sans `www.`), for a citation's fallback label. */
+function hostOf(url: string): string {
+  const m = url.match(/^https?:\/\/([^/\s]+)/i);
+  return m?.[1]?.replace(/^www\./, '') ?? url;
 }
 
 /**

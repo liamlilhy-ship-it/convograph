@@ -1183,6 +1183,25 @@
 .cg-pv-md img { max-width: 100%; height: auto; border-radius: 6px; }
 .cg-pv-md hr { border: 0; border-top: 1px solid var(--cg-border); margin: 1em 0; }
 
+/* Inline web-citation chips (claude.ai reference links), woven in after the cited
+   phrase: a small rounded pill showing the source's site name, in a slightly muted
+   color so it reads as a reference, not body text — mirrors claude.ai. No underline. */
+.cg-cite { white-space: nowrap; }
+.cg-cite a {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--cg-bg);
+  border: 1px solid var(--cg-border);
+  color: var(--cg-fg-muted);
+  font-size: 0.82em;
+  line-height: 1.5;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+.cg-cite a:hover { color: var(--cg-accent); border-color: var(--cg-accent); }
+
 /* Media sections */
 .cg-pv-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .cg-pv-image { display: block; max-width: 100%; }

@@ -14,9 +14,25 @@
  * names.
  */
 
+/**
+ * A web citation claude.ai attaches to a `text` block — the source behind an
+ * inline reference link. `start_index`/`end_index` are character offsets into the
+ * SAME block's raw text marking the cited span. (Claude-only: ChatGPT carries its
+ * citations elsewhere, so its adapter never sets this.)
+ */
+export type NormalizedCitation = {
+  title?: string;
+  url?: string;
+  start_index?: number;
+  end_index?: number;
+  metadata?: { site_name?: string; site_domain?: string; favicon_url?: string };
+};
+
 export type NormalizedContentBlock = {
   type: string;
   text?: string;
+  /** Citations on a `text` block, each anchored to a span via start/end offsets. */
+  citations?: NormalizedCitation[];
   /** tool_use blocks carry the invoked tool's name and input (e.g. claude.ai's
    *  `visualize:show_widget`, whose input.widget_code is renderable markup). */
   name?: string;
