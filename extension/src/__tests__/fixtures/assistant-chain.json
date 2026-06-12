@@ -1,0 +1,48 @@
+{
+  "uuid": "conv-assistant-chain",
+  "current_leaf_message_uuid": "a4",
+  "chat_messages": [
+    {
+      "uuid": "h1",
+      "parent_message_uuid": null,
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Build the title slide" }],
+      "created_at": "2026-05-27T10:00:00Z"
+    },
+    {
+      "uuid": "a1",
+      "parent_message_uuid": "h1",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Let me examine the template." }],
+      "created_at": "2026-05-27T10:00:01Z"
+    },
+    {
+      "uuid": "a2",
+      "parent_message_uuid": "a1",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Now refining the layout." }],
+      "created_at": "2026-05-27T10:00:02Z"
+    },
+    {
+      "uuid": "a3",
+      "parent_message_uuid": "a2",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Here is the finished slide." }],
+      "created_at": "2026-05-27T10:00:03Z"
+    },
+    {
+      "uuid": "h2",
+      "parent_message_uuid": "a3",
+      "sender": "human",
+      "content": [{ "type": "text", "text": "Adjust the colors" }],
+      "created_at": "2026-05-27T10:00:04Z"
+    },
+    {
+      "uuid": "a4",
+      "parent_message_uuid": "h2",
+      "sender": "assistant",
+      "content": [{ "type": "text", "text": "Updated the colors." }],
+      "created_at": "2026-05-27T10:00:05Z"
+    }
+  ]
+}

@@ -1,6 +1,14 @@
 import type { BuiltTree, TreeNode } from './buildTree';
 import type { NodePreview } from './preview';
-import type { PreviewBlock } from './contentKinds';
+import type {
+  PreviewBlock,
+  ContentKind,
+  ImageRef,
+  FileRef,
+  ArtifactRef,
+  WidgetRef,
+  LinkItem,
+} from './contentKinds';
 import { siblingHighlights } from './siblingDiff';
 
 /**
@@ -154,9 +162,108 @@ function descendToLeaf(startId: string, built: BuiltTree): string {
   }
 }
 
+/**
+ * A turn's answer is the maximal LINEAR run of consecutive assistant messages —
+ * claude.ai emits several assistant messages for one agentic/tool turn (a "thinking"
+ * step, tool calls, then the final prose). Walks from the head (a human's assistant
+ * child) while each step has exactly one child that is itself an assistant; a fork
+ * (≠1 child, or a non-assistant child) ends the run. Single-message answers return
+ * just `[head]`, so strictly-alternating providers (e.g. ChatGPT) are a no-op.
+ */
+function collectAnswerChain(head: TreeNode, built: BuiltTree): TreeNode[] {
+  const steps: TreeNode[] = [head];
+  const seen = new Set<string>([head.id]);
+  let cur = head;
+  for (;;) {
+    if (cur.childIds.length !== 1) break;
+    const child = built.byId.get(cur.childIds[0]!);
+    if (!child || child.sender !== 'assistant' || seen.has(child.id)) break;
+    steps.push(child);
+    seen.add(child.id);
+    cur = child;
+  }
+  return steps;
+}
+
+/**
+ * Merges the content-kinds across a multi-step answer so artifacts / images / widgets
+ * generated in ANY step still surface in the footer. Item-bearing kinds concatenate
+ * (deduped); the single-instance badge kinds (code/list/table) keep the first
+ * occurrence. Output order matches `detectKinds`.
+ */
+function mergeKinds(lists: ContentKind[][]): ContentKind[] {
+  const images: ImageRef[] = [];
+  const files: FileRef[] = [];
+  const widgets: WidgetRef[] = [];
+  const artifacts: ArtifactRef[] = [];
+  const links: LinkItem[] = [];
+  let code: ContentKind | undefined;
+  let list: ContentKind | undefined;
+  let table: ContentKind | undefined;
+  for (const kinds of lists) {
+    for (const k of kinds) {
+      switch (k.kind) {
+        case 'image': images.push(...k.images); break;
+        case 'attachment': files.push(...k.files); break;
+        case 'widget': widgets.push(...k.widgets); break;
+        case 'artifact': artifacts.push(...k.items); break;
+        case 'links': links.push(...k.items); break;
+        case 'code': code ??= k; break;
+        case 'list': list ??= k; break;
+        case 'table': table ??= k; break;
+      }
+    }
+  }
+  const dedupe = <T>(arr: T[], key: (t: T) => string): T[] => {
+    const seen = new Set<string>();
+    return arr.filter((x) => {
+      const k = key(x);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
+  const img = dedupe(images, (i) => i.fullUrl ?? i.thumbUrl);
+  const fil = dedupe(files, (f) => f.name);
+  const wid = dedupe(widgets, (w) => w.code);
+  const art = dedupe(artifacts, (a) => a.id ?? a.name);
+  const lnk = dedupe(links, (l) => l.url);
+  const out: ContentKind[] = [];
+  if (code) out.push(code);
+  if (list) out.push(list);
+  if (table) out.push(table);
+  if (img.length) out.push({ kind: 'image', count: img.length, images: img });
+  if (fil.length) out.push({ kind: 'attachment', count: fil.length, files: fil });
+  if (wid.length) out.push({ kind: 'widget', count: wid.length, widgets: wid });
+  if (art.length) out.push({ kind: 'artifact', count: art.length, items: art });
+  if (lnk.length) out.push({ kind: 'links', count: lnk.length, items: lnk.slice(0, 5) });
+  return out;
+}
+
+/**
+ * Preview for a merged multi-step answer. The collapsed SNIPPET (title/body) comes
+ * from the LAST step — the final prose, not an opening "Let me…" preamble — while the
+ * content-kinds are merged across every step. Single-step answers pass through
+ * unchanged (minus highlights, which the sibling-diff pass fills in).
+ */
+function mergeAnswerPreview(steps: TreeNode[]): NodePreview {
+  const last = steps[steps.length - 1]!.preview;
+  if (steps.length === 1) return { ...last, highlights: [] };
+  return {
+    title: last.title,
+    body: last.body,
+    kinds: mergeKinds(steps.map((s) => s.preview.kinds)),
+    wordCount: steps.reduce((n, s) => n + s.preview.wordCount, 0),
+    highlights: [],
+  };
+}
+
 export function buildDisplayTree(built: BuiltTree): DisplayTree {
   const pairById = new Map<string, TurnPair>();
   const pairsByHuman = new Map<string, string[]>();
+  // Every answer-chain member message → the id of the pair that owns it, so Pass 2
+  // can wire a question hanging off ANY step of a multi-step answer to the right turn.
+  const chainMemberToPairId = new Map<string, string>();
 
   // Pass 1: create a pair for every (human, assistant-child). Humans with no
   // assistant child still get a (H, null) pending pair.
@@ -193,23 +300,31 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
     } else {
       const ids: string[] = [];
       for (const a of assistantChildren) {
-        const id = pairId(node.id, a.id);
+        // Collapse the answer's consecutive assistant messages into one logical turn.
+        const chain = collectAnswerChain(a, built);
+        const tail = chain[chain.length - 1]!;
+        const id = pairId(node.id, a.id); // keyed by the chain HEAD (unique per regen branch)
         ids.push(id);
+        for (const step of chain) chainMemberToPairId.set(step.id, id);
         pairById.set(id, {
           id,
           humanId: node.id,
-          assistantId: a.id,
+          // The TAIL message is what the next turn attaches to and what an
+          // Ask-follow-up completion must parent — so it is this turn's assistantId.
+          assistantId: tail.id,
           questionParentId: node.parentId,
-          leafId: descendToLeaf(a.id, built),
+          leafId: descendToLeaf(tail.id, built),
           parentId: null,
           childIds: [],
           humanFullText: node.fullText,
           humanBody: node.body,
           humanPreview: node.preview,
-          assistantFullText: a.fullText,
-          assistantBody: a.body,
-          // Clone so sibling-diff writes don't mutate the shared TreeNode preview.
-          assistantPreview: { ...a.preview, highlights: [] },
+          // Merge every step so no content is dropped: full text + bodies concatenate
+          // in document order; the snippet/preview come from mergeAnswerPreview.
+          assistantFullText: chain.map((s) => s.fullText).filter(Boolean).join('\n\n'),
+          assistantBody: chain.flatMap((s) => s.body),
+          // mergeAnswerPreview clones, so sibling-diff writes don't mutate a shared preview.
+          assistantPreview: mergeAnswerPreview(chain),
           isOnActivePath: false,
           siblingIndex: 0,
           siblingCount: 1,
@@ -238,21 +353,17 @@ export function buildDisplayTree(built: BuiltTree): DisplayTree {
     }
   }
 
-  // Pass 2: wire parent/child between pairs. The parent of (H, A) is the pair
-  // whose assistantId === H.parentId (the prior turn whose assistant spawned
-  // this human Q).
+  // Pass 2: wire parent/child between pairs. A question Q attaches to some assistant
+  // message (its parent); that message belongs to exactly one answer chain, so the
+  // owning pair is the parent turn. `chainMemberToPairId` maps EVERY chain member to
+  // its pair, so a Q hanging off a mid/tail step of a multi-step answer still resolves
+  // — the old "grandparent must be human" check failed there, detaching the subtree
+  // into a spurious root.
   for (const p of pairById.values()) {
     const human = built.byId.get(p.humanId);
-    if (!human) continue;
-    const parentAssistantId = human.parentId;
-    if (!parentAssistantId) continue;
-    const parentAssistant = built.byId.get(parentAssistantId);
-    if (!parentAssistant || parentAssistant.sender !== 'assistant') continue;
-    const grandHuman = parentAssistant.parentId
-      ? built.byId.get(parentAssistant.parentId)
-      : null;
-    if (!grandHuman || grandHuman.sender !== 'human') continue;
-    const parentPairId = pairId(grandHuman.id, parentAssistant.id);
+    if (!human || !human.parentId) continue;
+    const parentPairId = chainMemberToPairId.get(human.parentId);
+    if (!parentPairId) continue;
     const parent = pairById.get(parentPairId);
     if (!parent) continue;
     p.parentId = parent.id;
