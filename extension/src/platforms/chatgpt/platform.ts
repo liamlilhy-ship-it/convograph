@@ -6,6 +6,7 @@ import {
   parseConversationIdFromUrl,
 } from './client';
 import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
+import { detectActiveLeafFromDom } from './activeLeaf';
 import { revealNodeViaRail } from './promptRail';
 import { createCompletion, retryCompletion } from './writes';
 import { chatgptDom } from './dom';
@@ -76,6 +77,9 @@ export const ChatGptPlatform: Platform = {
 
   parseConversationId: (href) => parseConversationIdFromUrl(href),
   fetchConversation: (convId) => getConversation(convId),
+  // ChatGPT's native arrows are client-only, so the active branch lives in the
+  // DOM, not the fetched conversation — read it from there (see activeLeaf.ts).
+  detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
   async setActiveLeaf(convId, node) {
     const conv = await getNormalizedConversation(convId);
     // Pass the raw conversation so switchToLeaf can reveal an off-window branch

@@ -83,6 +83,13 @@ export interface Platform {
   parseConversationId(href?: string): string | null;
   /** Fetch + normalize the conversation (each provider does its own auth). */
   fetchConversation(convId: string): Promise<NormalizedConversation>;
+  /** Read the active branch's leaf from the page DOM, for platforms whose server
+   *  does NOT persist branch selection (ChatGPT — its native `‹ ›` arrows change
+   *  only the DOM, so the fetched leaf can't see the switch). Returns the leaf
+   *  node id, or null when it can't be determined (DOM not rendered / virtualized).
+   *  Optional: platforms whose fetch already reflects the active branch (Claude)
+   *  omit it, and the app uses the fetched leaf. */
+  detectActiveLeaf?(conv: NormalizedConversation): string | null;
   /** Switch the active branch to the node's leaf. Only called when
    *  `capabilities.serverBranchSwitch` is true. */
   setActiveLeaf(convId: string, node: DisplayNode): Promise<void>;
