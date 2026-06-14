@@ -303,11 +303,19 @@ export function App({ platform }: { platform: Platform }) {
     try {
       const conv = await platform.fetchConversation(convId);
       if (req !== reqRef.current) return;
-      // Keep the active path on the branch the user last jumped to when the
-      // platform doesn't persist branch selection (ChatGPT) — a re-fetch would
-      // otherwise revert the highlight to the server's (unchanged) leaf.
-      if (!platform.capabilities.serverPersistsActiveBranch && selectedLeafRef.current) {
-        conv.current_leaf_message_uuid = selectedLeafRef.current;
+      // On platforms that don't persist branch selection server-side (ChatGPT),
+      // the fetched leaf (current_node) is blind to the user's native `‹ ›` arrow
+      // switches — those change only the DOM. So read the active branch from the
+      // DOM and prefer it; this makes the highlight follow native branch switching,
+      // like Claude's does (Claude's fetched leaf already reflects the switch, so
+      // it omits detectActiveLeaf and this is skipped). Fall back to the branch the
+      // user last jumped to in-graph (which also drove the native arrows) when the
+      // DOM can't tell us (leaf virtualized out of a long chat), then the server's
+      // leaf. The MutationObserver-driven reload (watchConversation) already fires
+      // on an arrow click, so this re-highlights with no extra fetch.
+      if (!platform.capabilities.serverPersistsActiveBranch) {
+        const leaf = platform.detectActiveLeaf?.(conv) ?? selectedLeafRef.current;
+        if (leaf) conv.current_leaf_message_uuid = leaf;
       }
       const tree = buildDisplayTree(buildTree(conv));
       setConvModel(conv.model ?? null);
