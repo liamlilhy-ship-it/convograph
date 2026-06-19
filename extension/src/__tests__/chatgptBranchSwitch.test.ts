@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchPlan, isReversiblySwitchable } from '../platforms/chatgpt/branchSwitch';
+import { activeChildOf, branchPlan, isReversiblySwitchable } from '../platforms/chatgpt/branchSwitch';
 import type { NormalizedConversation, NormalizedMessage } from '../platforms/model';
 
 const msg = (
@@ -118,5 +118,50 @@ describe('isReversiblySwitchable (block one-way image-regenerate branches)', () 
       chat_messages: [msg('u', null, 'human', 1), msg('a', 'u', 'assistant', 2)],
     };
     expect(isReversiblySwitchable(lin, 'a')).toBe(true);
+  });
+});
+
+describe('activeChildOf (the bubble carrying a branch point control)', () => {
+  const byId = (c: NormalizedConversation) => new Map(c.chat_messages.map((m) => [m.uuid, m]));
+
+  it('returns the edited-question child shown at an assistant branch point', () => {
+    // assistant `a` → [edited questions q1, q2]; active branch q1 → ans1.
+    const c: NormalizedConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'ans1',
+      chat_messages: [
+        msg('u', null, 'human', 1),
+        msg('a', 'u', 'assistant', 2),
+        msg('q1', 'a', 'human', 3),
+        msg('q2', 'a', 'human', 4),
+        msg('ans1', 'q1', 'assistant', 5),
+      ],
+    };
+    // The control sits on q1 (the shown edited question), NOT on the assistant `a`.
+    expect(activeChildOf(byId(c), 'ans1', 'a')).toBe('q1');
+  });
+
+  it('returns the shown answer at a regenerate (user-parent) branch point', () => {
+    // user `u1` → [a1, a1b]; active branch a1 → u2 → a2.
+    expect(activeChildOf(byId(conv), 'a2', 'u1')).toBe('a1');
+  });
+
+  it('returns the active root turn for a ROOT (edited-first-message) branch', () => {
+    // r1/r2 are both parent-less roots; active leaf is under r2.
+    const c: NormalizedConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'ar2',
+      chat_messages: [
+        msg('r1', null, 'human', 1),
+        msg('ar1', 'r1', 'assistant', 2),
+        msg('r2', null, 'human', 3),
+        msg('ar2', 'r2', 'assistant', 4),
+      ],
+    };
+    expect(activeChildOf(byId(c), 'ar2', ' root')).toBe('r2');
+  });
+
+  it('returns null when the parent is not on the leaf path', () => {
+    expect(activeChildOf(byId(conv), 'a2', 'nonexistent')).toBeNull();
   });
 });

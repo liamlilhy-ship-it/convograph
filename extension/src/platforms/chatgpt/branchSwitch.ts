@@ -1,6 +1,7 @@
 import type { NormalizedConversation, NormalizedMessage } from '../model';
 import type { ChatGptConversation } from './types';
 import { rawActiveUserIds, revealUserMessage } from './promptRail';
+import { detectActiveLeafFromDom } from './activeLeaf';
 
 /**
  * Switches the live ChatGPT chat to the branch ending at a target leaf by driving
@@ -191,10 +192,14 @@ async function selectSibling(
   for (let attempt = 0; attempt < siblingCount + 5; attempt++) {
     let ctrl = findBranchControl(siblingCount, parent, byId);
     if (!ctrl && reveal) {
-      // Bring the (lazy-unloaded) control back via the rail, then re-find it.
+      // Bring the (lazy-unloaded) control back via the rail, then re-find it. The
+      // control renders a tick after its bubble mounts, so poll briefly rather than
+      // checking once.
       if (await reveal()) {
-        await wait(200);
-        ctrl = findBranchControl(siblingCount, parent, byId);
+        for (let i = 0; i < 5 && !ctrl; i++) {
+          await wait(200);
+          ctrl = findBranchControl(siblingCount, parent, byId);
+        }
       }
     }
     if (!ctrl) {
@@ -236,6 +241,27 @@ async function selectSibling(
   return false;
 }
 
+/**
+ * The child of `parent` (a branchPlan key — ROOT for a parent-less root turn) on the
+ * branch ending at `leaf`: i.e. the sibling CURRENTLY shown at that branch point.
+ * That turn's bubble is the one carrying the `< n/m >` version control, so it's what
+ * the prompt rail must land on to re-mount the control. Pure; exported for tests.
+ */
+export function activeChildOf(
+  byId: Map<string, NormalizedMessage>,
+  leaf: string,
+  parent: string,
+): string | null {
+  const guard = new Set<string>();
+  for (let cur: string | null = leaf; cur && !guard.has(cur); ) {
+    guard.add(cur);
+    const p = byId.get(cur)?.parent_message_uuid ?? ROOT;
+    if (p === parent) return cur;
+    cur = byId.get(cur)?.parent_message_uuid ?? null;
+  }
+  return null;
+}
+
 export async function switchToLeaf(
   conv: NormalizedConversation,
   targetLeafId: string,
@@ -247,16 +273,22 @@ export async function switchToLeaf(
   // treated as already-correct shared prefix rather than failing the whole switch.
   const progress = { switched: false };
   for (const step of branchPlan(conv, targetLeafId)) {
-    // ChatGPT lazy-unloads the branch's `< n/m >` control when its turn is out of
-    // the window — initially and again after each click. Give selectSibling a way
-    // to re-mount it via the prompt rail: reveal the branch point's user prompt
-    // (for a first-message ROOT branch, prompt 1).
-    const revealId = raw
-      ? step.parent === ROOT
-        ? rawActiveUserIds(raw, raw.current_node ?? '')[0]
-        : step.parent
+    // ChatGPT lazy-unloads the branch's `< n/m >` control when its turn is out of the
+    // window. selectSibling re-mounts it by driving the prompt rail to the bubble that
+    // CARRIES the control — the branch point's currently-shown child (e.g. the active
+    // edited question), NOT the assistant turn above it. Revealing the parent lands the
+    // rail one prompt short, so the control never mounts (verified live). Recomputed at
+    // reveal time so it tracks the active branch after an upper point has been switched;
+    // falls back to the active branch's first prompt for a ROOT (edited-first) branch.
+    const reveal = raw
+      ? () => {
+          const leaf = detectActiveLeafFromDom(conv) ?? conv.current_leaf_message_uuid;
+          const childId =
+            (leaf ? activeChildOf(byId, leaf, step.parent) : null) ??
+            (step.parent === ROOT ? rawActiveUserIds(raw, raw.current_node ?? '')[0] : step.parent);
+          return childId ? revealUserMessage(raw, childId) : Promise.resolve(false);
+        }
       : undefined;
-    const reveal = raw && revealId ? () => revealUserMessage(raw, revealId) : undefined;
     if (!(await selectSibling(step.parent, step.siblingCount, step.targetIdx, byId, progress, reveal))) {
       return false;
     }
