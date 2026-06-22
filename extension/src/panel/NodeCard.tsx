@@ -18,11 +18,14 @@ import {
   EditIcon,
   FollowUpIcon,
   SendIcon,
+  TagIcon,
 } from './icons';
 import { usePlatformUI } from './platformUI';
 import { type PreviewItem } from './HoverPreview';
 import { FullPreview } from './FullPreview';
 import { svgDataUri } from './widgetRender';
+import { TagPicker } from './TagPicker';
+import { nodeMsgId, tagColorVar, type Tag } from '../tags/tags';
 
 // Fixed markdown font size for the in-place preview (the floating window's is
 // adjustable; the inline card's is intentionally fixed).
@@ -78,6 +81,18 @@ export type NodeCardProps = HoverApi & {
   onStartFollowup: (node: DisplayNode) => void;
   onRegenerate: (node: DisplayNode) => void;
   style?: CSSProperties;
+  /** Tagging (Claude only). When `onAssignTag` is present and the node has a
+   *  stable message id, the card shows a tag button + chips; absent (ChatGPT) →
+   *  no tag UI, render path unchanged. */
+  tags?: Tag[];
+  allTags?: Tag[];
+  tagHit?: boolean;
+  activeTagColorVar?: string | null;
+  onAssignTag?: (msgId: string, tagId: string) => void;
+  onUnassignTag?: (msgId: string, tagId: string) => void;
+  onCreateAndAssignTag?: (msgId: string, name: string) => void;
+  onRenameTag?: (tagId: string, name: string) => void;
+  onTagChipClick?: (tagId: string) => void;
 };
 
 /** Whether a preview carries media (drives the footer + the height tier). */
@@ -103,9 +118,24 @@ export function NodeCard({
   onStartFollowup,
   onRegenerate,
   style,
+  tags,
+  allTags,
+  tagHit,
+  activeTagColorVar,
+  onAssignTag,
+  onUnassignTag,
+  onCreateAndAssignTag,
+  onRenameTag,
+  onTagChipClick,
 }: NodeCardProps) {
   const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes } = usePlatformUI();
   const isHuman = node.role === 'human';
+  const [tagOpen, setTagOpen] = useState(false);
+  // Stable per-node tag key (humanId for a question node, assistantId for an
+  // answer node); null on a pending answer → not taggable. Tagging UI is present
+  // only when App wired the callbacks (Claude).
+  const msgId = nodeMsgId(node);
+  const taggable = !!onAssignTag && msgId != null;
   const p = node.preview;
   const text = isHuman ? p.title : p.body || p.title;
   const hover: HoverApi = { onPreview, onPreviewEnd };
@@ -123,9 +153,13 @@ export function NodeCard({
         : undefined;
   // A previewed card is a reader — fix the font and stop card clicks from
   // branch-jumping so text stays selectable.
-  const cardStyle: CSSProperties | undefined = isPreview
+  let cardStyle: CSSProperties | undefined = isPreview
     ? { ...style, ['--cg-pv-fs' as never]: `${INLINE_PREVIEW_FS}px` }
     : style;
+  // When this node is a hit for the active tag, ring it in that tag's color.
+  if (tagHit && activeTagColorVar) {
+    cardStyle = { ...(cardStyle ?? {}), ['--cg-hit-color' as never]: `var(${activeTagColorVar})` };
+  }
   // Regenerate retries an existing answer — only meaningful once the turn has one.
   const canRegenerate = node.assistantId != null;
 
@@ -136,6 +170,8 @@ export function NodeCard({
       data-active={node.isOnActivePath ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
+      data-tag-hit={tagHit ? 'true' : undefined}
+      data-tag-open={tagOpen ? 'true' : undefined}
       style={cardStyle}
       // Single click jumps to this message. In preview mode the body is for
       // reading, so the header row (below) becomes the jump target instead.
@@ -214,6 +250,22 @@ export function NodeCard({
                 <FollowUpIcon size={15} />
               </button>
             ))}
+          {taggable && (
+            <button
+              type="button"
+              className="cg-pv-btn"
+              data-active={tagOpen ? 'true' : 'false'}
+              data-tip="Tag this node"
+              aria-label="Tag this node"
+              aria-pressed={tagOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                setTagOpen((v) => !v);
+              }}
+            >
+              <TagIcon size={15} />
+            </button>
+          )}
           <button
             type="button"
             className="cg-pv-btn"
@@ -242,6 +294,36 @@ export function NodeCard({
           </button>
         </div>
       </div>
+      {taggable && tags && tags.length > 0 && (
+        <div className="cg-tag-chips">
+          {tags.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className="cg-tag-chip"
+              style={{ ['--cg-tag' as never]: `var(${tagColorVar(t.color)})` }}
+              data-tip={`Highlight “${t.name}”`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTagChipClick?.(t.id);
+              }}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {tagOpen && taggable && msgId && (
+        <TagPicker
+          nodeTags={tags ?? []}
+          allTags={allTags ?? []}
+          onSelectExisting={(tagId) => onAssignTag!(msgId, tagId)}
+          onCreate={(name) => onCreateAndAssignTag!(msgId, name)}
+          onRemoveFromNode={(tagId) => onUnassignTag!(msgId, tagId)}
+          onRename={(tagId, name) => onRenameTag!(tagId, name)}
+          onClose={() => setTagOpen(false)}
+        />
+      )}
       {isPreview ? (
         <div className="cg-node-pv-body nowheel nopan">
           <FullPreview node={node} onOpenMedia={onOpenMedia} />

@@ -1317,3 +1317,202 @@
 }
 .cg-pv-content .cg-artifact-type,
 .cg-pv-content .cg-file-meta { flex-shrink: 0; font-size: 10px; }
+
+/* ===== Tags ===== */
+
+/* A tag swatch — the colored square shared by chips, picker rows and the legend. */
+.cg-tag-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  background: var(--cg-tag, var(--cg-accent));
+}
+
+/* Per-card chip row (under the header). Each chip carries its hue in --cg-tag. */
+.cg-tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 10px 0;
+}
+.cg-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--cg-tag, var(--cg-accent));
+  background: color-mix(in srgb, var(--cg-tag, var(--cg-accent)) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cg-tag, var(--cg-accent)) 34%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cg-tag-chip:hover { background: color-mix(in srgb, var(--cg-tag, var(--cg-accent)) 26%, transparent); }
+.cg-tag-chip-x {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 0 0 1px;
+  opacity: 0.7;
+}
+.cg-tag-chip-x:hover { opacity: 1; }
+
+/* Highlight: hit nodes get a tag-colored ring; non-hits dim while a tag is active. */
+.cg-node[data-tag-hit="true"] {
+  border-color: var(--cg-hit-color, var(--cg-accent));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cg-hit-color, var(--cg-accent)) 50%, transparent), var(--cg-shadow);
+}
+.cg-canvas[data-tag-active="true"] .cg-node:not([data-tag-hit="true"]):not(:hover) { opacity: 0.4; }
+
+/* Let the picker popover escape the card's clip while open. */
+.cg-node[data-tag-open="true"] {
+  position: relative;
+  overflow: visible;
+  z-index: 30;
+}
+/* Lift the whole React Flow node wrapper so the popover draws over neighbor nodes
+   (React Flow sets a per-node inline z-index; override it for the open card). */
+.react-flow__node:has(.cg-node[data-tag-open="true"]) { z-index: 50 !important; overflow: visible; }
+
+/* Per-node tag combobox popover. */
+.cg-tag-picker {
+  position: absolute;
+  top: 36px;
+  right: 6px;
+  width: 244px;
+  max-width: calc(100% - 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--cg-bg-elev);
+  border: 1px solid var(--cg-border-strong);
+  border-radius: 10px;
+  box-shadow: var(--cg-shadow-float);
+  z-index: 40;
+  cursor: default;
+}
+.cg-tag-picker-selected { display: flex; flex-wrap: wrap; gap: 4px; }
+.cg-tag-picker-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-size: 13px;
+  border-radius: 7px;
+  border: 1px solid var(--cg-border-strong);
+  background: var(--cg-bg);
+  color: var(--cg-fg);
+}
+.cg-tag-picker-input:focus {
+  outline: none;
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 2px var(--cg-accent-soft);
+}
+.cg-tag-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.cg-tag-opt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+}
+.cg-tag-opt[data-selected="true"] { background: var(--cg-accent-soft); }
+.cg-tag-opt-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--cg-fg);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.cg-tag-opt-main:hover { background: color-mix(in srgb, var(--cg-fg) 7%, transparent); border-radius: 6px; }
+.cg-tag-opt-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-tag-check { color: var(--cg-accent); flex: none; }
+.cg-tag-opt-edit {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--cg-fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  opacity: 0;
+}
+.cg-tag-opt:hover .cg-tag-opt-edit { opacity: 0.8; }
+.cg-tag-opt-edit:hover { opacity: 1; color: var(--cg-fg); }
+.cg-tag-create {
+  border: 0;
+  background: transparent;
+  color: var(--cg-accent);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  padding: 6px;
+  border-radius: 6px;
+}
+.cg-tag-create:hover { background: var(--cg-accent-soft); }
+.cg-tag-empty { color: var(--cg-fg-muted); font-size: 12px; padding: 6px; }
+.cg-tag-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--cg-accent);
+  background: var(--cg-bg);
+  color: var(--cg-fg);
+}
+.cg-tag-rename-input:focus { outline: none; box-shadow: 0 0 0 2px var(--cg-accent-soft); }
+
+/* Toolbar legend. */
+.cg-tag-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cg-tag-legend-item { display: inline-flex; align-items: center; gap: 1px; }
+.cg-tag-legend-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--cg-border-strong);
+  background: var(--cg-bg-elev);
+  color: var(--cg-fg);
+  cursor: pointer;
+}
+.cg-tag-legend-toggle:hover { border-color: var(--cg-accent); }
+.cg-tag-legend-toggle[aria-pressed="true"] {
+  border-color: var(--cg-accent);
+  background: var(--cg-accent-soft);
+}
+.cg-tag-legend-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cg-tag-legend-act {
+  border: 0;
+  background: transparent;
+  color: var(--cg-fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  opacity: 0;
+}
+.cg-tag-legend-item:hover .cg-tag-legend-act { opacity: 0.75; }
+.cg-tag-legend-act:hover { opacity: 1; color: var(--cg-fg); }

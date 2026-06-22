@@ -3,6 +3,7 @@
   "name": "Conversation Graph",
   "version": "0.1.0",
   "description": "Visualize claude.ai and ChatGPT conversations as a tree of branches. Hover to preview, click to jump.",
+  "permissions": ["storage"],
   "host_permissions": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
   "content_scripts": [
     {

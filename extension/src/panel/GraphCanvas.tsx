@@ -16,6 +16,7 @@ import {
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard, DraftQuestionCard, DraftAnswerCard, hasMedia, type DraftView, type FooterItem } from './NodeCard';
+import { listTags, nodeMsgId, tagsForNode, type Tag, type TagState } from '../tags/tags';
 import { HoverPreview, type PreviewItem } from './HoverPreview';
 import { CenterIcon, PlusIcon, MinusIcon } from './icons';
 
@@ -51,6 +52,16 @@ type CgNodeData = {
   onStartEdit: (n: DisplayNode) => void;
   onStartFollowup: (n: DisplayNode) => void;
   onRegenerate: (n: DisplayNode) => void;
+  // Tagging (Claude only; all optional → ChatGPT render path unchanged).
+  tags?: Tag[];
+  allTags?: Tag[];
+  tagHit?: boolean;
+  activeTagColorVar?: string | null;
+  onAssignTag?: (msgId: string, tagId: string) => void;
+  onUnassignTag?: (msgId: string, tagId: string) => void;
+  onCreateAndAssignTag?: (msgId: string, name: string) => void;
+  onRenameTag?: (tagId: string, name: string) => void;
+  onTagChipClick?: (tagId: string) => void;
 };
 
 type CgDraftQData = {
@@ -92,9 +103,13 @@ const EXTENT_PAD = 300;
 // recent message sits centered with breathing room, not slammed to maxZoom.
 const CENTER_ZOOM = 0.9;
 
-/** Fixed height tier for a node — text-only vs. has-footer media. */
-function tierHeight(n: DisplayNode): number {
-  return hasMedia(n.preview) ? H_MEDIA : H_TEXT;
+// Extra height reserved for the tag-chip row when a node has tags.
+const CHIP_ROW_H = 28;
+
+/** Fixed height tier for a node — text-only vs. has-footer media, plus a chip row
+ *  when the node carries tags so dagre reserves space for them. */
+function tierHeight(n: DisplayNode, hasTags: boolean): number {
+  return (hasMedia(n.preview) ? H_MEDIA : H_TEXT) + (hasTags ? CHIP_ROW_H : 0);
 }
 
 /** Seeded handle geometry (edge-center of each card). The shadow-root quirk that
@@ -129,6 +144,15 @@ const NODE_TYPES = {
         onStartEdit={data.onStartEdit}
         onStartFollowup={data.onStartFollowup}
         onRegenerate={data.onRegenerate}
+        tags={data.tags}
+        allTags={data.allTags}
+        tagHit={data.tagHit}
+        activeTagColorVar={data.activeTagColorVar}
+        onAssignTag={data.onAssignTag}
+        onUnassignTag={data.onUnassignTag}
+        onCreateAndAssignTag={data.onCreateAndAssignTag}
+        onRenameTag={data.onRenameTag}
+        onTagChipClick={data.onTagChipClick}
       />
       <Handle type="source" position={data.sourcePos} isConnectable={false} />
     </>
@@ -217,6 +241,16 @@ export type GraphCanvasProps = {
   onRegenerate: (node: DisplayNode) => void;
   onCancelDraft: () => void;
   onSubmitDraft: (text: string) => void;
+  // Tagging (Claude only; absent on ChatGPT → no tag rendering, no relayout).
+  tagState?: TagState;
+  hitMsgIds?: Set<string>;
+  tagActive?: boolean;
+  activeTagColorVar?: string | null;
+  onAssignTag?: (msgId: string, tagId: string) => void;
+  onUnassignTag?: (msgId: string, tagId: string) => void;
+  onCreateAndAssignTag?: (msgId: string, name: string) => void;
+  onRenameTag?: (tagId: string, name: string) => void;
+  onTagChipClick?: (tagId: string) => void;
 };
 
 export function GraphCanvas({
@@ -236,7 +270,18 @@ export function GraphCanvas({
   onRegenerate,
   onCancelDraft,
   onSubmitDraft,
+  tagState,
+  hitMsgIds,
+  tagActive,
+  activeTagColorVar,
+  onAssignTag,
+  onUnassignTag,
+  onCreateAndAssignTag,
+  onRenameTag,
+  onTagChipClick,
 }: GraphCanvasProps) {
+  // All tags in the chat (combobox options); empty when tagging is off.
+  const allTags = useMemo(() => (tagState ? listTags(tagState) : []), [tagState]);
   const [hover, setHover] = useState<{ item: PreviewItem; anchor: DOMRect } | null>(null);
   const hoverTimer = useRef<number | null>(null);
 
@@ -315,11 +360,13 @@ export function GraphCanvas({
     const layoutInput: Array<{ id: string; parentId: string | null; width: number; height: number }> =
       tree.orderedNodes.map((n) => {
         const pv = previewIds.has(n.id);
+        const msgId = nodeMsgId(n);
+        const hasTags = !!(tagState && msgId && (tagState.assignments[msgId]?.length ?? 0) > 0);
         return {
           id: n.id,
           parentId: n.parentId,
           width: pv ? PREVIEW_W : NODE_W,
-          height: pv ? PREVIEW_H : tierHeight(n),
+          height: pv ? PREVIEW_H : tierHeight(n, hasTags),
         };
       });
     if (draftPresent) {
@@ -354,7 +401,7 @@ export function GraphCanvas({
       ];
     }
     return { laid: laidNodes, structEdges: edges, translateExtent: extent };
-  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating]);
+  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating, tagState]);
 
   const isTB = direction === 'TB';
   const targetPos = isTB ? Position.Top : Position.Left;
@@ -383,6 +430,9 @@ export function GraphCanvas({
       .filter((n) => n.id !== DRAFT_Q_ID && n.id !== DRAFT_A_ID)
       .map((n) => {
         const dn = byId.get(n.id)!;
+        const msgId = nodeMsgId(dn);
+        const nodeTags = tagState && msgId ? tagsForNode(tagState, msgId) : undefined;
+        const tagHit = !!(msgId && hitMsgIds?.has(msgId));
         return {
           id: n.id,
           type: 'cgNode',
@@ -412,10 +462,19 @@ export function GraphCanvas({
             onStartEdit,
             onStartFollowup,
             onRegenerate,
+            tags: nodeTags,
+            allTags: tagState ? allTags : undefined,
+            tagHit,
+            activeTagColorVar,
+            onAssignTag,
+            onUnassignTag,
+            onCreateAndAssignTag,
+            onRenameTag,
+            onTagChipClick,
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate, tagState, allTags, hitMsgIds, activeTagColorVar, onAssignTag, onUnassignTag, onCreateAndAssignTag, onRenameTag, onTagChipClick]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).
@@ -510,7 +569,7 @@ export function GraphCanvas({
   const minimapStyle = direction === 'TB' ? { width: 100, height: 156 } : { width: 165, height: 105 };
 
   return (
-    <div className="cg-canvas">
+    <div className="cg-canvas" data-tag-active={tagActive ? 'true' : undefined}>
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}

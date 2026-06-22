@@ -32,6 +32,15 @@ export function CodeIcon(p: IconProps) {
   );
 }
 
+export function TagIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M7.3 1.8H2.5a.7.7 0 0 0-.7.7v4.8a.7.7 0 0 0 .2.5l5.4 5.4a.7.7 0 0 0 1 0l4.3-4.3a.7.7 0 0 0 0-1L7.8 2a.7.7 0 0 0-.5-.2Z" />
+      <circle cx="4.5" cy="4.5" r="0.9" />
+    </svg>
+  );
+}
+
 export function ListIcon(p: IconProps) {
   return (
     <svg {...svgProps(p)}>

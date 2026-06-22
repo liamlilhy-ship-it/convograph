@@ -2,6 +2,20 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
 import { GraphCanvas } from './GraphCanvas';
+import { TagLegend } from './TagLegend';
+import {
+  EMPTY_TAG_STATE,
+  assignTag,
+  createTag,
+  deleteTag,
+  findTagByName,
+  listTags,
+  renameTag,
+  tagColorVar,
+  unassignTag,
+  type TagState,
+} from '../tags/tags';
+import { loadTagState, saveTagState } from '../tags/tagStore';
 import { PreviewLayer, DEFAULT_FS, type OpenPreview, type PreviewContent, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
@@ -125,6 +139,71 @@ export function App({ platform }: { platform: Platform }) {
   // cover, where it doesn't stick, so we replay the scroll on exit (when the chat
   // is visible) to land it top-aligned like a side-panel jump.
   const fsJumpTargetRef = useRef<DisplayNode | null>(null);
+
+  // ---- Tags (per-node, per-chat, local-only; Claude only) ----
+  const taggingOn = platform.capabilities.tagging === true;
+  const [tagState, setTagState] = useState<TagState>(EMPTY_TAG_STATE);
+  const [activeTagId, setActiveTagId] = useState<string | null>(null);
+  // The conversation a tag save belongs to; also guards the async-load race.
+  const convIdRef = useRef<string | null>(null);
+
+  // Single mutation path: reduce + persist (fire-and-forget) in lockstep.
+  const updateTags = useCallback((fn: (s: TagState) => TagState) => {
+    setTagState((prev) => {
+      const next = fn(prev);
+      if (next === prev) return prev;
+      const cid = convIdRef.current;
+      if (cid) void saveTagState(cid, next);
+      return next;
+    });
+  }, []);
+  const onAssignTag = useCallback(
+    (msgId: string, tagId: string) => updateTags((s) => assignTag(s, msgId, tagId)),
+    [updateTags],
+  );
+  const onUnassignTag = useCallback(
+    (msgId: string, tagId: string) => updateTags((s) => unassignTag(s, msgId, tagId)),
+    [updateTags],
+  );
+  const onCreateAndAssignTag = useCallback(
+    (msgId: string, name: string) =>
+      updateTags((s) => {
+        const existing = findTagByName(s, name);
+        if (existing) return assignTag(s, msgId, existing.id);
+        const [s2, tag] = createTag(s, name);
+        return assignTag(s2, msgId, tag.id);
+      }),
+    [updateTags],
+  );
+  const onRenameTag = useCallback(
+    (tagId: string, name: string) => updateTags((s) => renameTag(s, tagId, name)),
+    [updateTags],
+  );
+  const onDeleteTag = useCallback(
+    (tagId: string) => {
+      updateTags((s) => deleteTag(s, tagId));
+      setActiveTagId((cur) => (cur === tagId ? null : cur));
+    },
+    [updateTags],
+  );
+  const toggleActiveTag = useCallback(
+    (tagId: string) => setActiveTagId((cur) => (cur === tagId ? null : tagId)),
+    [],
+  );
+  const allTags = useMemo(() => listTags(tagState), [tagState]);
+  const hitMsgIds = useMemo(() => {
+    const out = new Set<string>();
+    if (!activeTagId) return out;
+    for (const [msgId, ids] of Object.entries(tagState.assignments)) {
+      if (ids.includes(activeTagId)) out.add(msgId);
+    }
+    return out;
+  }, [activeTagId, tagState]);
+  const activeTagColorVar = useMemo(() => {
+    if (!activeTagId) return null;
+    const t = tagState.tags[activeTagId];
+    return t ? tagColorVar(t.color) : null;
+  }, [activeTagId, tagState]);
 
   // Don't push the page in full-screen — the graph covers the whole viewport, so
   // there's no side panel to make room for (and the native chat is hidden).
@@ -255,6 +334,11 @@ export function App({ platform }: { platform: Platform }) {
       setDraft(null);
       setFullscreen(false);
       selectedLeafRef.current = null;
+      // Drop the in-memory tags for the closing chat (chat switch closes the
+      // panel); they reload from storage for the next chat on its load().
+      setTagState(EMPTY_TAG_STATE);
+      setActiveTagId(null);
+      convIdRef.current = null;
     }
   }, [open]);
 
@@ -320,6 +404,14 @@ export function App({ platform }: { platform: Platform }) {
       const tree = buildDisplayTree(buildTree(conv));
       setConvModel(conv.model ?? null);
       setStatus({ kind: 'ready', tree, convId });
+      // Load this chat's tags from local storage (Claude only). Guarded by convId
+      // so a fast chat-switch mid-load can't apply stale tags to the new chat.
+      if (platform.capabilities.tagging === true) {
+        convIdRef.current = convId;
+        void loadTagState(convId).then((s) => {
+          if (convIdRef.current === convId) setTagState(s);
+        });
+      }
       // If an open draft's real message has now landed in the tree, drop the
       // placeholder so the two never show side by side (the "duplicate on
       // refresh"). Batched with setStatus → single render, no overlap frame.
@@ -742,6 +834,15 @@ export function App({ platform }: { platform: Platform }) {
               {status.kind === 'no-conversation' && 'Open a chat to see its tree'}
               {status.kind === 'error' && status.message}
             </span>
+            {taggingOn && status.kind === 'ready' && (
+              <TagLegend
+                tags={allTags}
+                activeTagId={activeTagId}
+                onToggle={toggleActiveTag}
+                onRename={onRenameTag}
+                onDelete={onDeleteTag}
+              />
+            )}
           </div>
           {status.kind === 'ready' ? (
             <GraphCanvas
@@ -767,6 +868,19 @@ export function App({ platform }: { platform: Platform }) {
               onRegenerate={regenerate}
               onCancelDraft={cancelDraft}
               onSubmitDraft={submitDraft}
+              {...(taggingOn
+                ? {
+                    tagState,
+                    hitMsgIds,
+                    tagActive: activeTagId != null,
+                    activeTagColorVar,
+                    onAssignTag,
+                    onUnassignTag,
+                    onCreateAndAssignTag,
+                    onRenameTag,
+                    onTagChipClick: toggleActiveTag,
+                  }
+                : {})}
             />
           ) : (
             <div className="cg-empty">

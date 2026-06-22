@@ -40,6 +40,11 @@ export type PlatformCapabilities = {
   edit: boolean;
   followup: boolean;
   regenerate: boolean;
+  /** Per-node tagging UI (combobox, chips, legend) + chrome.storage persistence.
+   *  Optional: when absent/false ALL tag UI is hidden and no storage is touched.
+   *  Tags are keyed by stable message uuid + conversation id, so this is purely a
+   *  per-platform on/off switch (currently Claude-only). */
+  tagging?: boolean;
 };
 
 /** The DOM hooks the navigation/anchoring code needs, abstracted per platform. */

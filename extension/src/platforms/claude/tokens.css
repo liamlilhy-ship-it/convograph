@@ -19,6 +19,17 @@
   --cg-on-accent: #fff;
   --cg-minimap-mask: rgba(31, 30, 29, 0.08);
   --cg-minimap-node: #b9b6ad;
+  /* Tag palette — distinct hues for node tags (light). Index = Tag.color. */
+  --cg-tag-0: #d64545;
+  --cg-tag-1: #c07400;
+  --cg-tag-2: #2f8a4e;
+  --cg-tag-3: #0f9b8e;
+  --cg-tag-4: #2f6fd0;
+  --cg-tag-5: #5b54d6;
+  --cg-tag-6: #8a4fd0;
+  --cg-tag-7: #c43d8a;
+  --cg-tag-8: #5b6b7a;
+  --cg-tag-9: #9c6b3f;
   --cg-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --cg-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   color-scheme: light dark;
@@ -38,4 +49,15 @@
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #6b6862;
+  /* Tag palette (dark) — brighter so chips/rings read on dark surfaces. */
+  --cg-tag-0: #f08a8a;
+  --cg-tag-1: #e0a64d;
+  --cg-tag-2: #6fd08a;
+  --cg-tag-3: #4fd0c2;
+  --cg-tag-4: #7aa8f5;
+  --cg-tag-5: #9b95f0;
+  --cg-tag-6: #c08af0;
+  --cg-tag-7: #ef8ac4;
+  --cg-tag-8: #9fb0c0;
+  --cg-tag-9: #d2a679;
 }
