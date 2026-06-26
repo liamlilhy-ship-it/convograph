@@ -22,6 +22,21 @@ function syncTheme(host: HTMLElement, platform: Platform) {
   mm?.addEventListener?.('change', apply);
 }
 
+// Keep our host attached when the page's framework removes it. Watches <html> (for a
+// whole-<body> swap) and <body> (for our host being removed) — shallow childList only,
+// so the callback is a cheap connectivity check. React only prunes foreign nodes during
+// hydration, so in practice this re-attaches once and then stays quiet.
+function keepHostMounted(host: HTMLElement) {
+  const mo = new MutationObserver(() => {
+    if (!host.isConnected && document.body) {
+      document.body.appendChild(host);
+      mo.observe(document.body, { childList: true }); // re-observe if <body> was replaced
+    }
+  });
+  mo.observe(document.documentElement, { childList: true });
+  mo.observe(document.body, { childList: true });
+}
+
 export function mount(platform: Platform): void {
   if (document.getElementById(HOST_ID)) return;
 
@@ -29,6 +44,12 @@ export function mount(platform: Platform): void {
   host.id = HOST_ID;
   host.style.cssText = 'all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483645;';
   document.body.appendChild(host);
+  // ChatGPT's client render reconciles <body> during hydration/route transitions and
+  // discards nodes it didn't create — including our host — so the pill paints once and
+  // then vanishes. The detached host keeps its shadow root + React tree in memory, so
+  // re-appending the same node restores it with no re-mount. Only ChatGPT does this;
+  // claude.ai leaves the host alone, so the guard is wired up for ChatGPT only.
+  if (platform.id === 'chatgpt') keepHostMounted(host);
   syncTheme(host, platform);
 
   const shadow = host.attachShadow({ mode: 'open' });
