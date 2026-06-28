@@ -2,6 +2,7 @@ import type { NormalizedConversation, NormalizedMessage } from '../model';
 import type { ChatGptConversation } from './types';
 import { rawActiveUserIds, revealUserMessage } from './promptRail';
 import { detectActiveLeafFromDom } from './activeLeaf';
+import { isBranchArrow, navArrowsIn } from './controls';
 
 /**
  * Switches the live ChatGPT chat to the branch ending at a target leaf by driving
@@ -141,9 +142,7 @@ function findBranchControl(
   parent: string,
   byId: Map<string, NormalizedMessage>,
 ): BranchControl | null {
-  const navBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).filter((b) =>
-    /previous|next/i.test(b.getAttribute('aria-label') || ''),
-  );
+  const navBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).filter(isBranchArrow);
   for (const btn of navBtns) {
     const turn = btn.closest<HTMLElement>('[data-testid^="conversation-turn"]');
     if (!turnAtParent(turn, parent, byId)) continue; // a control for a DIFFERENT branch point
@@ -155,13 +154,13 @@ function findBranchControl(
       if (!counterEl) continue;
       const parts = (counterEl.textContent || '').trim().split('/').map((s) => parseInt(s.trim(), 10));
       if (parts[1] !== siblingCount) continue;
-      const btns = Array.from(cur.querySelectorAll<HTMLButtonElement>('button')).filter((b) =>
-        /previous|next/i.test(b.getAttribute('aria-label') || ''),
-      );
+      const arrows = navArrowsIn(cur);
       return {
         current: parts[0]!,
-        prev: btns.find((b) => /previous/i.test(b.getAttribute('aria-label') || '')) ?? null,
-        next: btns.find((b) => /next/i.test(b.getAttribute('aria-label') || '')) ?? null,
+        // DOM order is [prev, next]; the `data-rtl-flip` marker (not the localized
+        // aria-label) identifies the arrows, so this holds in any UI language.
+        prev: arrows[0] ?? null,
+        next: arrows[1] ?? null,
         anchor: cur,
       };
     }

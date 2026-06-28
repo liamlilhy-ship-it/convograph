@@ -9,6 +9,7 @@ import {
 } from './client';
 import { switchToLeaf } from './branchSwitch';
 import { revealUserMessage } from './promptRail';
+import { findEditButton, findRegenTrigger, findEditSendButton, findTryAgainItem } from './controls';
 
 /**
  * The ChatGPT write actions — edit a question, regenerate an answer, ask a
@@ -21,13 +22,14 @@ import { revealUserMessage } from './promptRail';
  * the new branch (we `invalidateConversation` before returning), or throw a clear
  * Error that the app surfaces as a toast.
  *
- * Native controls (verified live):
- *   - Edit:      a user bubble's `button[aria-label="Edit message"]` opens an inline
- *                <textarea> with text "Cancel" / "Send" buttons. Send branches a
- *                sibling user message → new answer.
- *   - Regenerate: an answer's `button[aria-label="Switch model"]` opens a Radix
- *                popover (needs a pointer-event sequence, not a plain click) whose
- *                "Try again • <model>" item regenerates a new assistant sibling.
+ * Native controls (verified live). Located via controls.ts by LANGUAGE-INDEPENDENT
+ * signals (testid / data-rtl-flip / aria-haspopup), not English aria-labels — those
+ * are localized (zh: 编辑消息 / 切换模型 / 发送 / 重试) and broke non-English users:
+ *   - Edit:      a user bubble's pencil button opens an inline <textarea> with
+ *                Cancel / Send buttons. Send branches a sibling user message → new answer.
+ *   - Regenerate: an answer's Switch-model button opens a Radix popover (needs a
+ *                pointer-event sequence, not a plain click) whose "Try again • <model>"
+ *                item regenerates a new assistant sibling.
  *   - Follow-up: type into the composer (`#prompt-textarea`, a ProseMirror
  *                contenteditable — `execCommand('insertText')` registers it) and
  *                click `button[data-testid="send-button"]`.
@@ -147,18 +149,6 @@ async function ensureMounted(raw: ChatGptConversation, id: string): Promise<HTML
   return el;
 }
 
-/** A button within `root` whose aria-label exactly matches. Dispatches a hover
- *  first since ChatGPT renders some turn-toolbar buttons only on pointer-over. */
-function turnButton(root: HTMLElement, ariaLabel: string): HTMLButtonElement | null {
-  root.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-  root.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-  return (
-    Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-      (b) => (b.getAttribute('aria-label') || '') === ariaLabel,
-    ) ?? null
-  );
-}
-
 /** Set a React-controlled <textarea> (the inline edit box) to `text`. */
 function setTextareaValue(ta: HTMLTextAreaElement, text: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
@@ -212,15 +202,6 @@ function answerSectionAfter(qEl: HTMLElement): HTMLElement | null {
     if (sections[i]!.querySelector('[data-message-author-role="assistant"]')) return sections[i]!;
   }
   return null;
-}
-
-/** The "Try again …" item inside the open Switch-model popover (regenerates with
- *  the current model). */
-function findTryAgainItem(): HTMLElement | null {
-  const items = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="menuitem"],[role="menuitemradio"],[role="option"],button,a'),
-  );
-  return items.find((e) => /^try again\b/i.test((e.textContent || '').trim())) ?? null;
 }
 
 function clickItem(el: HTMLElement): void {
@@ -343,7 +324,7 @@ async function doEdit(
   const userEl = await ensureMounted(raw, userId);
   const turn = turnOf(userEl);
   if (!turn) throw new Error("Couldn't find that message's controls.");
-  const editBtn = turnButton(turn, 'Edit message');
+  const editBtn = await waitFor(() => findEditButton(turn), 2000);
   if (!editBtn) throw new Error("Couldn't find ChatGPT's edit control — the page may have updated.");
   checkAbort(signal);
   editBtn.click();
@@ -354,13 +335,7 @@ async function doEdit(
   if (!ta) throw new Error("ChatGPT's edit box didn't open.");
   setTextareaValue(ta, prompt);
   const editor = turnOf(ta) ?? turn;
-  const sendBtn = await waitFor(
-    () =>
-      Array.from(editor.querySelectorAll<HTMLButtonElement>('button')).find(
-        (b) => /^send$/i.test((b.textContent || '').trim()) && !b.disabled,
-      ),
-    2000,
-  );
+  const sendBtn = await waitFor(() => findEditSendButton(editor), 2000);
   if (!sendBtn) throw new Error("Couldn't find the edit Send button.");
   checkAbort(signal);
   const before = lastAssistantEl();
@@ -378,7 +353,7 @@ async function doRegenerate(
   const qEl = await ensureMounted(raw, questionId);
   const answerTurn = answerSectionAfter(qEl);
   if (!answerTurn) throw new Error("Couldn't find the answer to regenerate.");
-  const switchBtn = turnButton(answerTurn, 'Switch model');
+  const switchBtn = await waitFor(() => findRegenTrigger(answerTurn), 2000);
   if (!switchBtn) throw new Error("Couldn't find ChatGPT's regenerate control — the page may have updated.");
   checkAbort(signal);
   openRadixMenu(switchBtn);
