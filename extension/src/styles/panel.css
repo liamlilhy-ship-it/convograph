@@ -238,18 +238,25 @@
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
 }
-/* Search highlight. While a query is active, non-matching cards fade harder than
-   the active-path dim so matches across every branch pop out; matches get an
-   accent ring, and the current (stepped-to) match a stronger one. Hover still
-   restores any dimmed card. */
-.cg-node[data-search="true"][data-match="false"]:not(:hover) { opacity: 0.2; }
-.cg-node[data-search="true"][data-match="true"] {
-  border-color: var(--cg-accent);
-  box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
+/* Search highlight. A search overlays the graph: matches are ringed in the cool
+   "find" color — deliberately distinct from the warm accent of the active path —
+   while the active branch stays visible for context. Only nodes that are NEITHER
+   a match NOR on the active path fade back, so the two highlights never blur
+   together. Hover restores any faded card. */
+.cg-node[data-search="true"][data-match="false"]:not([data-active="true"]):not(:hover) {
+  opacity: 0.22;
 }
-.cg-node[data-current-match="true"] {
-  border-color: var(--cg-accent);
-  box-shadow: 0 0 0 3px var(--cg-accent), var(--cg-shadow);
+.cg-node[data-search="true"][data-match="true"] {
+  border-color: var(--cg-find);
+  box-shadow: 0 0 0 2px var(--cg-find-soft), var(--cg-shadow);
+}
+/* The current match — the result the stepper/switch is sitting on. A bold solid
+   ring + glow sets it apart from the other (thin-ringed) matches and from the
+   active path. The extra attributes give it the highest specificity so it always
+   wins, even mid-switch when it's also becoming the active node. */
+.cg-node[data-search="true"][data-match="true"][data-current-match="true"] {
+  border-color: var(--cg-find);
+  box-shadow: 0 0 0 3px var(--cg-find), 0 0 16px 3px var(--cg-find-soft), var(--cg-shadow);
 }
 /* Question vs answer: distinct soft surface tints + an accent top edge on
    questions. Tints stay light so dark body text remains fully readable. */

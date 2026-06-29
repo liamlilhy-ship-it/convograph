@@ -99,6 +99,12 @@ export function App({ platform }: { platform: Platform }) {
   // `searchIndex` is the current match the stepper sits on.
   const [searchQuery, setSearchQuery] = useState('');
   const [searchIndex, setSearchIndex] = useState(0);
+  // Bumped on each explicit step so the graph pans to the current match — only on
+  // navigation, never on typing (which would make the canvas jump every keystroke).
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+  // Whether the user has navigated yet for the current query. The FIRST step lands
+  // on the already-highlighted match (index 0) instead of skipping past it.
+  const searchVisitedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
   // Nodes currently expanded into an in-place ("inline") preview. Multiple may be
@@ -543,19 +549,24 @@ export function App({ platform }: { platform: Platform }) {
   const searchActive = searchQuery.trim().length > 0;
 
   // Reset the stepper to the first match whenever the query (or the loaded
-  // conversation) changes, so a new search starts at the top.
+  // conversation) changes, so a new search starts at the top (un-visited).
   useEffect(() => {
     setSearchIndex(0);
+    searchVisitedRef.current = false;
   }, [searchQuery, status.kind === 'ready' ? status.convId : null]);
 
-  // Step to the next/previous match (wrapping) and jump to it — reusing the
-  // node-click path, which branch-switches to off-path matches and scrolls.
+  // Step through matches and jump to the landing one — reusing the node-click
+  // path, which branch-switches to off-path matches and scrolls the chat. The
+  // first step focuses the current match (index 0) without advancing; later steps
+  // move (wrapping). Each call bumps the focus nonce so the graph pans to it.
   const stepMatch = useCallback(
     (delta: 1 | -1) => {
       if (!matches.length) return;
       const base = clampedIndex < 0 ? 0 : clampedIndex;
-      const next = (base + delta + matches.length) % matches.length;
+      const next = searchVisitedRef.current ? (base + delta + matches.length) % matches.length : base;
+      searchVisitedRef.current = true;
       setSearchIndex(next);
+      setSearchFocusNonce((n) => n + 1);
       void handleNodeClick(matches[next]!.node);
     },
     [matches, clampedIndex, handleNodeClick],
@@ -844,6 +855,7 @@ export function App({ platform }: { platform: Platform }) {
               searchActive={searchActive}
               matchIds={matchIds}
               currentMatchId={currentMatchId}
+              searchFocusNonce={searchFocusNonce}
               draft={draft}
               locked={draft != null}
               lockReason={

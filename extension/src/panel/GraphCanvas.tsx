@@ -206,6 +206,27 @@ function CanvasControls({ bounds }: { bounds: Rect | null }) {
   );
 }
 
+/**
+ * Pans the viewport to the current search match on each explicit step. Lives
+ * inside the ReactFlow provider (so it can use `useReactFlow`) and fires only
+ * when `nonce` changes — i.e. on navigation, never on typing — preserving the
+ * user's current zoom so the canvas glides rather than jumps.
+ */
+function SearchFocus({ nonce, bounds }: { nonce?: number; bounds: Rect | null }) {
+  const { setCenter, getZoom } = useReactFlow();
+  const boundsRef = useRef(bounds);
+  boundsRef.current = bounds;
+  useEffect(() => {
+    const b = boundsRef.current;
+    if (nonce == null || !b) return;
+    void setCenter(b.x + b.width / 2, b.y + b.height / 2, { zoom: getZoom(), duration: 400 });
+    // Intentionally keyed only on `nonce`: pan on a step, not when `bounds`
+    // changes as the user types.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nonce]);
+  return null;
+}
+
 export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
@@ -221,6 +242,9 @@ export type GraphCanvasProps = {
   matchIds?: Set<string>;
   /** Id of the match the stepper is currently on (strongest emphasis). */
   currentMatchId?: string | null;
+  /** Bumped on each explicit search step — pans the viewport to the current match
+   *  (only on navigation, so typing never moves the canvas). */
+  searchFocusNonce?: number;
   /** The floating draft node (edit / follow-up / regenerate), if open. */
   draft: DraftState | null;
   /** A draft is open anywhere — disable all real nodes' quick-action buttons. */
@@ -246,6 +270,7 @@ export function GraphCanvas({
   searchActive = false,
   matchIds,
   currentMatchId,
+  searchFocusNonce,
   draft,
   locked,
   lockReason,
@@ -391,6 +416,14 @@ export function GraphCanvas({
     }
     return null;
   }, [laid, tree]);
+
+  // Rect of the current search match — what SearchFocus pans the viewport to on
+  // each step. Null when there's no current match.
+  const currentMatchBounds = useMemo<Rect | null>(() => {
+    if (!currentMatchId) return null;
+    const n = laid.find((l) => l.id === currentMatchId);
+    return n ? { x: n.x, y: n.y, width: n.width, height: n.height } : null;
+  }, [laid, currentMatchId]);
 
   // ---- Real message nodes ----
   // Referentially stable while a draft streams (no draft-content deps), so React
@@ -554,6 +587,7 @@ export function GraphCanvas({
           <Controls showZoom={false} showFitView={false} showInteractive={false}>
             <CanvasControls bounds={recentBounds} />
           </Controls>
+          <SearchFocus nonce={searchFocusNonce} bounds={currentMatchBounds} />
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
