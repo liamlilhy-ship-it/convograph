@@ -139,6 +139,45 @@
   color: var(--cg-fg-muted);
 }
 
+/* Whole-conversation search row (Claude only). The input grows; the counter +
+   stepper sit to its right. Stepper/clear buttons reuse `.cg-toolbar button`. */
+.cg-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.cg-search-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cg-border-strong);
+  background: var(--cg-bg-elev);
+  color: var(--cg-fg);
+}
+.cg-search-input::placeholder { color: var(--cg-fg-muted); }
+.cg-search-input:focus {
+  outline: none;
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 2px var(--cg-accent-soft);
+}
+.cg-search-count {
+  font-size: 11px;
+  color: var(--cg-fg-muted);
+  white-space: nowrap;
+  padding: 0 2px;
+}
+.cg-search button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.cg-search button[disabled]:hover { border-color: var(--cg-border-strong); }
+
 .cg-canvas {
   flex: 1;
   position: relative;
@@ -198,6 +237,19 @@
 .cg-node[data-active="true"] {
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
+}
+/* Search highlight. While a query is active, non-matching cards fade harder than
+   the active-path dim so matches across every branch pop out; matches get an
+   accent ring, and the current (stepped-to) match a stronger one. Hover still
+   restores any dimmed card. */
+.cg-node[data-search="true"][data-match="false"]:not(:hover) { opacity: 0.2; }
+.cg-node[data-search="true"][data-match="true"] {
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
+}
+.cg-node[data-current-match="true"] {
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 3px var(--cg-accent), var(--cg-shadow);
 }
 /* Question vs answer: distinct soft surface tints + an accent top edge on
    questions. Tints stay light so dark body text remains fully readable. */

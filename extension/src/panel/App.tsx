@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
+import { searchNodes } from '../tree/search';
 import { GraphCanvas } from './GraphCanvas';
+import { SearchBox } from './SearchBox';
 import { PreviewLayer, DEFAULT_FS, type OpenPreview, type PreviewContent, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
@@ -93,6 +95,11 @@ export function App({ platform }: { platform: Platform }) {
   const [dragging, setDragging] = useState(false);
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Whole-conversation search (Claude only). `searchQuery` filters the tree;
+  // `searchIndex` is the current match the stepper sits on.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchIndex, setSearchIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
   // Nodes currently expanded into an in-place ("inline") preview. Multiple may be
   // open at once; the graph layout reflows around them. Distinct from the floating
@@ -255,6 +262,7 @@ export function App({ platform }: { platform: Platform }) {
       setDraft(null);
       setFullscreen(false);
       selectedLeafRef.current = null;
+      setSearchQuery('');
     }
   }, [open]);
 
@@ -418,6 +426,19 @@ export function App({ platform }: { platform: Platform }) {
     const onKey = (e: KeyboardEvent) => {
       // Esc steps out one level: full-screen → side panel → closed.
       if (e.key === 'Escape' && open) {
+        // If the in-panel search has focus, Esc clears + blurs it (keeping the
+        // graph open) instead of stepping out. This listener is capture-phase, so
+        // it must own the case — the input's own onKeyDown runs too late to win.
+        const sEl = searchInputRef.current;
+        const searchFocused =
+          !!sEl && (sEl.getRootNode() as ShadowRoot | Document).activeElement === sEl;
+        if (searchFocused) {
+          e.preventDefault();
+          e.stopPropagation();
+          setSearchQuery('');
+          sEl.blur();
+          return;
+        }
         if (fullscreen) setFullscreen(false);
         else setOpen(false);
       }
@@ -425,10 +446,24 @@ export function App({ platform }: { platform: Platform }) {
         e.preventDefault();
         setOpen((v) => !v);
       }
+      // While the graph is open on a search-capable platform, ⌘/Ctrl+F focuses
+      // the in-panel search instead of the browser's native find. Native find
+      // still works when the panel is closed.
+      if (
+        open &&
+        platform.capabilities.search &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === 'f'
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, fullscreen]);
+  }, [open, fullscreen, platform]);
 
   const handleNodeClick = useCallback(
     async (node: DisplayNode) => {
@@ -489,6 +524,47 @@ export function App({ platform }: { platform: Platform }) {
     },
     [load, platform],
   );
+
+  // ---- Search across all branches (Claude only) ----
+  // Matches every node in every branch (data already in memory). Recomputed only
+  // when the tree or query changes; per-node text is memoized inside searchNodes.
+  const matches = useMemo(
+    () =>
+      status.kind === 'ready' && platform.capabilities.search
+        ? searchNodes(status.tree.orderedNodes, searchQuery)
+        : [],
+    [status, searchQuery, platform],
+  );
+  // Clamp the index — matches shrink as the user types — and derive the current
+  // match + the id set the graph dims/rings against.
+  const clampedIndex = matches.length ? Math.min(searchIndex, matches.length - 1) : -1;
+  const currentMatchId = clampedIndex >= 0 ? matches[clampedIndex]!.id : null;
+  const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
+  const searchActive = searchQuery.trim().length > 0;
+
+  // Reset the stepper to the first match whenever the query (or the loaded
+  // conversation) changes, so a new search starts at the top.
+  useEffect(() => {
+    setSearchIndex(0);
+  }, [searchQuery, status.kind === 'ready' ? status.convId : null]);
+
+  // Step to the next/previous match (wrapping) and jump to it — reusing the
+  // node-click path, which branch-switches to off-path matches and scrolls.
+  const stepMatch = useCallback(
+    (delta: 1 | -1) => {
+      if (!matches.length) return;
+      const base = clampedIndex < 0 ? 0 : clampedIndex;
+      const next = (base + delta + matches.length) % matches.length;
+      setSearchIndex(next);
+      void handleNodeClick(matches[next]!.node);
+    },
+    [matches, clampedIndex, handleNodeClick],
+  );
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+    searchInputRef.current?.blur();
+  }, []);
 
   // ---- Quick actions via a floating draft node ----
   // Runs the completion for a draft that has flipped to `generating`. Keeps the
@@ -736,6 +812,18 @@ export function App({ platform }: { platform: Platform }) {
             <button onClick={() => setOpen(false)} data-tip="Close (Esc)">✕</button>
           </div>
           <div className="cg-toolbar" style={{ borderTop: 0, paddingTop: 0 }}>
+            {platform.capabilities.search && status.kind === 'ready' && (
+              <SearchBox
+                query={searchQuery}
+                onQuery={setSearchQuery}
+                matchCount={matches.length}
+                activeIndex={clampedIndex}
+                onPrev={() => stepMatch(-1)}
+                onNext={() => stepMatch(1)}
+                onClose={clearSearch}
+                inputRef={searchInputRef}
+              />
+            )}
             <span className="cg-status">
               {status.kind === 'loading' && 'Loading…'}
               {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}
@@ -753,6 +841,9 @@ export function App({ platform }: { platform: Platform }) {
               previewIds={previewIds}
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
+              searchActive={searchActive}
+              matchIds={matchIds}
+              currentMatchId={currentMatchId}
               draft={draft}
               locked={draft != null}
               lockReason={

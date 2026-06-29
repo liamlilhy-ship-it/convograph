@@ -34,6 +34,12 @@ type CgNodeData = {
   width: number;
   height: number;
   isPreview: boolean;
+  /** A search query is in effect — dim non-matching cards. */
+  searchActive: boolean;
+  /** This card's text matches the current query. */
+  isMatch: boolean;
+  /** This is the match the stepper is currently sitting on. */
+  isCurrentMatch: boolean;
   /** A draft is open — disable this node's quick-action buttons. */
   locked: boolean;
   /** Tooltip explaining why the actions are disabled (shown on hover when locked). */
@@ -117,6 +123,9 @@ const NODE_TYPES = {
         node={data.node}
         jumping={data.jumping}
         isPreview={data.isPreview}
+        searchActive={data.searchActive}
+        isMatch={data.isMatch}
+        isCurrentMatch={data.isCurrentMatch}
         locked={data.locked}
         lockReason={data.lockReason}
         style={{ width: data.width, height: data.height }}
@@ -206,6 +215,12 @@ export type GraphCanvasProps = {
   previewIds: Set<string>;
   onToggleInlinePreview: (node: DisplayNode) => void;
   jumpingId?: string | null;
+  /** A search query is in effect — dim non-matching cards. */
+  searchActive?: boolean;
+  /** Ids of cards matching the current search query. */
+  matchIds?: Set<string>;
+  /** Id of the match the stepper is currently on (strongest emphasis). */
+  currentMatchId?: string | null;
   /** The floating draft node (edit / follow-up / regenerate), if open. */
   draft: DraftState | null;
   /** A draft is open anywhere — disable all real nodes' quick-action buttons. */
@@ -228,6 +243,9 @@ export function GraphCanvas({
   previewIds,
   onToggleInlinePreview,
   jumpingId,
+  searchActive = false,
+  matchIds,
+  currentMatchId,
   draft,
   locked,
   lockReason,
@@ -399,6 +417,9 @@ export function GraphCanvas({
             width: n.width,
             height: n.height,
             isPreview: previewIds.has(dn.id),
+            searchActive,
+            isMatch: matchIds?.has(dn.id) ?? false,
+            isCurrentMatch: currentMatchId === dn.id,
             locked,
             lockReason,
             targetPos,
@@ -415,7 +436,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, matchIds, currentMatchId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).

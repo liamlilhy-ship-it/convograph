@@ -70,7 +70,9 @@ export const ChatGptPlatform: Platform = {
   // the native UI; branch selection is client-only (not persisted server-side, so
   // serverPersistsActiveBranch stays false), but edit/followup/regenerate end in a
   // real send that ChatGPT persists, after which the app refetches the graph.
-  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true },
+  // search is off: ChatGPT's tree is fetched/paged differently and history is
+  // lazy-loaded, so a whole-tree search isn't supported in v1.
+  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: false },
   rootParentUuid: '',
   tokensCss,
   dom: chatgptDom,

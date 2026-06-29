@@ -63,6 +63,12 @@ export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
   isPreview?: boolean;
+  /** A search query is in effect — non-matching cards are dimmed. */
+  searchActive?: boolean;
+  /** This card's text matches the current search query. */
+  isMatch?: boolean;
+  /** This is the match the stepper currently sits on (strongest ring). */
+  isCurrentMatch?: boolean;
   /** A draft/generation is open somewhere — disable all quick-action buttons so a
    *  second completion can't fire concurrently (claude.ai rejects those). */
   locked?: boolean;
@@ -91,6 +97,9 @@ export function NodeCard({
   node,
   jumping,
   isPreview,
+  searchActive,
+  isMatch,
+  isCurrentMatch,
   locked,
   lockReason,
   onPreview,
@@ -136,6 +145,9 @@ export function NodeCard({
       data-active={node.isOnActivePath ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
+      data-search={searchActive ? 'true' : 'false'}
+      data-match={isMatch ? 'true' : 'false'}
+      data-current-match={isCurrentMatch ? 'true' : 'false'}
       style={cardStyle}
       // Single click jumps to this message. In preview mode the body is for
       // reading, so the header row (below) becomes the jump target instead.
