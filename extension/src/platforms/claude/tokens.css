@@ -7,6 +7,10 @@
   --cg-border-strong: rgba(31, 30, 29, 0.22);
   --cg-accent: #d97757;
   --cg-accent-soft: rgba(217, 119, 87, 0.14);
+  /* Search-match highlight — a cool teal/green, deliberately far from the warm
+     accent so a search hit never reads as the (accent-colored) active path. */
+  --cg-find: #13a17a;
+  --cg-find-soft: rgba(19, 161, 122, 0.22);
   /* Per-role node surfaces — soft, readable tints (Q = warm coral wash,
      A = clean white) that separate question from answer without heaviness. */
   --cg-node-q-bg: #fbf2ec;
@@ -33,6 +37,8 @@
   --cg-border-strong: rgba(250, 249, 245, 0.22);
   --cg-accent: #d97757;
   --cg-accent-soft: rgba(217, 119, 87, 0.20);
+  --cg-find: #45c8a3;
+  --cg-find-soft: rgba(69, 200, 163, 0.30);
   --cg-node-q-bg: #2e2825;
   --cg-node-a-bg: #262524;
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);

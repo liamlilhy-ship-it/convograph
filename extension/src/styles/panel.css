@@ -138,6 +138,59 @@
   font-size: 11px;
   color: var(--cg-fg-muted);
 }
+/* The message-count caption: keep the toolbar's even 10px top/bottom padding (it
+   used to zero its top, cramming it under the title) but drop the band border so
+   it reads as a quiet sub-line that flows into the canvas, not a boxed row. */
+.cg-status-row {
+  border-bottom: none;
+}
+
+/* The toggled-open search bar is its own `.cg-toolbar` row, so it inherits the
+   even 10px top/bottom padding (the old row zeroed its top, cramming it against
+   the title). Raised so the stepper/close tooltips paint over the status row. */
+.cg-search-row {
+  position: relative;
+  z-index: 1;
+}
+
+/* Whole-conversation search row (Claude only). The input grows; the counter +
+   stepper sit to its right. Stepper/close buttons reuse `.cg-toolbar button`. */
+.cg-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.cg-search-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cg-border-strong);
+  background: var(--cg-bg-elev);
+  color: var(--cg-fg);
+}
+.cg-search-input::placeholder { color: var(--cg-fg-muted); }
+.cg-search-input:focus {
+  outline: none;
+  border-color: var(--cg-accent);
+  box-shadow: 0 0 0 2px var(--cg-accent-soft);
+}
+.cg-search-count {
+  font-size: 11px;
+  color: var(--cg-fg-muted);
+  white-space: nowrap;
+  padding: 0 2px;
+}
+.cg-search button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+.cg-search button[disabled]:hover { border-color: var(--cg-border-strong); }
 
 .cg-canvas {
   flex: 1;
@@ -198,6 +251,41 @@
 .cg-node[data-active="true"] {
   border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft), var(--cg-shadow);
+}
+/* Search highlight. A search overlays the graph: matches are ringed in the cool
+   "find" color — deliberately distinct from the warm accent of the active path —
+   while the active branch stays visible for context. Only nodes that are NEITHER
+   a match NOR on the active path fade back, so the two highlights never blur
+   together. Hover restores any faded card. */
+.cg-node[data-search="true"][data-match="false"]:not([data-active="true"]):not(:hover) {
+  opacity: 0.22;
+}
+.cg-node[data-search="true"][data-match="true"] {
+  border-color: var(--cg-find);
+  box-shadow: 0 0 0 2px var(--cg-find-soft), var(--cg-shadow);
+}
+/* The current match — the result the stepper/switch is sitting on. A bold solid
+   ring + glow sets it apart from the other (thin-ringed) matches and from the
+   active path. The extra attributes give it the highest specificity so it always
+   wins, even mid-switch when it's also becoming the active node. */
+.cg-node[data-search="true"][data-match="true"][data-current-match="true"] {
+  border-color: var(--cg-find);
+  box-shadow: 0 0 0 3px var(--cg-find), 0 0 16px 3px var(--cg-find-soft), var(--cg-shadow);
+}
+/* Matched text inside an expanded preview — the "find" color so it ties back to
+   the node ring. Every hit gets a soft wash; the one the stepper is on (when a
+   node holds several) is filled so the user sees which match the switch is on. */
+mark.cg-search-hit {
+  background: var(--cg-find-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: inset 0 -1px 0 var(--cg-find);
+}
+mark.cg-search-hit[data-current="true"] {
+  background: var(--cg-find);
+  color: var(--cg-on-accent);
+  box-shadow: none;
 }
 /* Question vs answer: distinct soft surface tints + an accent top edge on
    questions. Tints stay light so dark body text remains fully readable. */

@@ -40,6 +40,10 @@ export type PlatformCapabilities = {
   edit: boolean;
   followup: boolean;
   regenerate: boolean;
+  /** Can the panel search across the whole conversation tree? Requires the full
+   *  tree (all branches) to be in memory — true for Claude (fetched in one call).
+   *  When false the search UI never mounts. */
+  search: boolean;
 };
 
 /** The DOM hooks the navigation/anchoring code needs, abstracted per platform. */

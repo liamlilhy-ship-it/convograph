@@ -241,6 +241,16 @@ export function MinusIcon(p: IconProps) {
   );
 }
 
+/** Magnifier glyph — toggles the conversation search bar. */
+export function SearchIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <circle cx="6" cy="6" r="3.6" />
+      <line x1="8.7" y1="8.7" x2="12" y2="12" />
+    </svg>
+  );
+}
+
 /** Crosshair/target glyph — recenters the canvas on the most recent message. */
 export function CenterIcon(p: IconProps) {
   return (

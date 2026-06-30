@@ -63,6 +63,16 @@ export type NodeCardProps = HoverApi & {
   node: DisplayNode;
   jumping?: boolean;
   isPreview?: boolean;
+  /** A search query is in effect — non-matching cards are dimmed. */
+  searchActive?: boolean;
+  /** The active query text — highlighted inside this node's expanded preview. */
+  searchQuery?: string;
+  /** This card's text matches the current search query. */
+  isMatch?: boolean;
+  /** This is the match the stepper currently sits on (strongest ring). */
+  isCurrentMatch?: boolean;
+  /** On the current match: which body occurrence to scroll to / emphasize. */
+  matchOccurrence?: number;
   /** A draft/generation is open somewhere — disable all quick-action buttons so a
    *  second completion can't fire concurrently (claude.ai rejects those). */
   locked?: boolean;
@@ -91,6 +101,11 @@ export function NodeCard({
   node,
   jumping,
   isPreview,
+  searchActive,
+  searchQuery,
+  isMatch,
+  isCurrentMatch,
+  matchOccurrence,
   locked,
   lockReason,
   onPreview,
@@ -136,6 +151,9 @@ export function NodeCard({
       data-active={node.isOnActivePath ? 'true' : 'false'}
       data-jumping={jumping ? 'true' : 'false'}
       data-preview={isPreview ? 'true' : 'false'}
+      data-search={searchActive ? 'true' : 'false'}
+      data-match={isMatch ? 'true' : 'false'}
+      data-current-match={isCurrentMatch ? 'true' : 'false'}
       style={cardStyle}
       // Single click jumps to this message. In preview mode the body is for
       // reading, so the header row (below) becomes the jump target instead.
@@ -244,7 +262,12 @@ export function NodeCard({
       </div>
       {isPreview ? (
         <div className="cg-node-pv-body nowheel nopan">
-          <FullPreview node={node} onOpenMedia={onOpenMedia} />
+          <FullPreview
+            node={node}
+            onOpenMedia={onOpenMedia}
+            highlightQuery={searchActive ? searchQuery : undefined}
+            currentOccurrence={isCurrentMatch ? matchOccurrence ?? 0 : undefined}
+          />
         </div>
       ) : (
         <>

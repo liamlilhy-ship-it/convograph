@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree, type DisplayTree, type DisplayNode } from '../tree/displayTree';
+import { searchNodes } from '../tree/search';
 import { GraphCanvas } from './GraphCanvas';
+import { SearchBox } from './SearchBox';
 import { PreviewLayer, DEFAULT_FS, type OpenPreview, type PreviewContent, type Geometry } from './PreviewLayer';
 import { watchConversation, watchUrl } from '../content/observers';
 import { trackComposerAnchor, type AnchorPosition } from '../content/anchorComposer';
@@ -11,7 +13,7 @@ import { PlatformApiError } from '../platforms/errors';
 import { PlatformUIProvider, assistantIconFor, type PlatformUI } from './platformUI';
 import type { DraftKind, FooterItem } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
-import { FullscreenIcon, ExitFullscreenIcon } from './icons';
+import { FullscreenIcon, ExitFullscreenIcon, SearchIcon } from './icons';
 
 /**
  * A pending quick-action draft. Drives the floating draft node on the canvas and
@@ -93,6 +95,21 @@ export function App({ platform }: { platform: Platform }) {
   const [dragging, setDragging] = useState(false);
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Whole-conversation search (Claude only). `searchOpen` toggles the search bar
+  // from the toolbar; `searchQuery` filters the tree; `searchIndex` is the current
+  // match the stepper sits on.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchIndex, setSearchIndex] = useState(0);
+  // Bumped on each explicit step so the graph pans to the current match — only on
+  // navigation, never on typing (which would make the canvas jump every keystroke).
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+  // Whether the user has navigated yet for the current query. The FIRST step lands
+  // on the already-highlighted match (index 0) instead of skipping past it.
+  const searchVisitedRef = useRef(false);
+  // The single node the search auto-expanded (null = none / it was already open).
+  const searchAutoExpandedRef = useRef<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
   // Nodes currently expanded into an in-place ("inline") preview. Multiple may be
   // open at once; the graph layout reflows around them. Distinct from the floating
@@ -255,6 +272,9 @@ export function App({ platform }: { platform: Platform }) {
       setDraft(null);
       setFullscreen(false);
       selectedLeafRef.current = null;
+      setSearchOpen(false);
+      setSearchQuery('');
+      searchAutoExpandedRef.current = null;
     }
   }, [open]);
 
@@ -416,8 +436,17 @@ export function App({ platform }: { platform: Platform }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Esc steps out one level: full-screen → side panel → closed.
+      // Esc steps out one level: search bar → full-screen → side panel → closed.
       if (e.key === 'Escape' && open) {
+        // An open search bar is the innermost layer — Esc closes it first (keeping
+        // the graph open) before stepping out. This listener is capture-phase, so
+        // it must own the case — the input's own onKeyDown runs too late to win.
+        if (searchOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          setSearchOpen(false);
+          return;
+        }
         if (fullscreen) setFullscreen(false);
         else setOpen(false);
       }
@@ -425,10 +454,25 @@ export function App({ platform }: { platform: Platform }) {
         e.preventDefault();
         setOpen((v) => !v);
       }
+      // While the graph is open on a search-capable platform, ⌘/Ctrl+F opens (and
+      // focuses) the in-panel search instead of the browser's native find. Native
+      // find still works when the panel is closed.
+      if (
+        open &&
+        platform.capabilities.search &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === 'f'
+      ) {
+        e.preventDefault();
+        setSearchOpen(true);
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, fullscreen]);
+  }, [open, fullscreen, platform, searchOpen]);
 
   const handleNodeClick = useCallback(
     async (node: DisplayNode) => {
@@ -489,6 +533,101 @@ export function App({ platform }: { platform: Platform }) {
     },
     [load, platform],
   );
+
+  // ---- Search across all branches (Claude only) ----
+  // Matches every node in every branch (data already in memory). Recomputed only
+  // when the tree or query changes; per-node text is memoized inside searchNodes.
+  const matches = useMemo(
+    () =>
+      status.kind === 'ready' && platform.capabilities.search
+        ? searchNodes(status.tree.orderedNodes, searchQuery)
+        : [],
+    [status, searchQuery, platform],
+  );
+  // Clamp the index — matches shrink as the user types — and derive the current
+  // match + the id set the graph dims/rings against.
+  const clampedIndex = matches.length ? Math.min(searchIndex, matches.length - 1) : -1;
+  const currentMatchId = clampedIndex >= 0 ? matches[clampedIndex]!.id : null;
+  // Which occurrence within the current node the stepper is on — drives the
+  // in-preview scroll/emphasis when a node holds several hits.
+  const currentMatchOccurrence = clampedIndex >= 0 ? matches[clampedIndex]!.occurrence : 0;
+  const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
+  const searchActive = searchQuery.trim().length > 0;
+
+  // Auto-expand the current match's in-place preview while stepping, so the
+  // matched text can be scrolled to + highlighted. Only ONE node is search-opened
+  // at a time; this ref holds it so leaving restores the node's prior fold state —
+  // a node WE opened re-folds, a node the user already had open stays open.
+  const focusPreviewForSearch = useCallback(
+    (nodeId: string) => {
+      const auto = searchAutoExpandedRef.current;
+      if (auto === nodeId) return; // already search-expanded this node
+      // Track for revert only if it wasn't already open (then we re-fold it later).
+      searchAutoExpandedRef.current = previewIds.has(nodeId) ? null : nodeId;
+      setPreviewIds((prev) => {
+        const next = new Set(prev);
+        if (auto && auto !== nodeId) next.delete(auto); // restore the previous node's fold
+        next.add(nodeId);
+        return next;
+      });
+    },
+    [previewIds],
+  );
+
+  // Collapse whatever the search auto-expanded, leaving user-opened previews intact.
+  const endSearchPreview = useCallback(() => {
+    const auto = searchAutoExpandedRef.current;
+    searchAutoExpandedRef.current = null;
+    if (!auto) return;
+    setPreviewIds((prev) => {
+      if (!prev.has(auto)) return prev;
+      const next = new Set(prev);
+      next.delete(auto);
+      return next;
+    });
+  }, []);
+
+  // Reset the stepper to the first match whenever the query (or the loaded
+  // conversation) changes, so a new search starts at the top (un-visited). Also
+  // drop any search-driven preview, since navigation restarts.
+  useEffect(() => {
+    setSearchIndex(0);
+    searchVisitedRef.current = false;
+    endSearchPreview();
+  }, [searchQuery, status.kind === 'ready' ? status.convId : null, endSearchPreview]);
+
+  // Step through matches and focus the landing one ON THE CANVAS ONLY — no branch
+  // switch, no native-chat scroll (search is non-destructive browsing). The first
+  // step focuses the current match (index 0) without advancing; later steps move
+  // (wrapping). Each call bumps the focus nonce (graph pans to it) and auto-expands
+  // its preview (which scrolls to + highlights the matched text).
+  const stepMatch = useCallback(
+    (delta: 1 | -1) => {
+      if (!matches.length) return;
+      const base = clampedIndex < 0 ? 0 : clampedIndex;
+      const next = searchVisitedRef.current ? (base + delta + matches.length) % matches.length : base;
+      searchVisitedRef.current = true;
+      setSearchIndex(next);
+      setSearchFocusNonce((n) => n + 1);
+      focusPreviewForSearch(matches[next]!.node.id);
+    },
+    [matches, clampedIndex, focusPreviewForSearch],
+  );
+
+  const toggleSearch = useCallback(() => setSearchOpen((v) => !v), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  // Opening the search bar focuses + selects its input; closing it clears the
+  // query (which resets highlights and collapses any search-driven preview via the
+  // query-change effect). Centralized here so every open/close path behaves alike.
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    } else {
+      setSearchQuery('');
+    }
+  }, [searchOpen]);
 
   // ---- Quick actions via a floating draft node ----
   // Runs the completion for a draft that has flipped to `generating`. Keeps the
@@ -717,6 +856,17 @@ export function App({ platform }: { platform: Platform }) {
           <div className="cg-toolbar cg-toolbar-main">
             <h1>Conversation graph</h1>
             <div className="cg-spacer" />
+            {platform.capabilities.search && status.kind === 'ready' && (
+              <button
+                className="cg-iconbtn"
+                onClick={toggleSearch}
+                data-tip={searchOpen ? 'Close search (⌘F)' : 'Search all branches (⌘F)'}
+                aria-label="Search all branches"
+                aria-pressed={searchOpen}
+              >
+                <SearchIcon size={14} />
+              </button>
+            )}
             {openPreviews.length > 1 && (
               <button onClick={tidyPreviews} data-tip="Tidy previews">⊞</button>
             )}
@@ -735,7 +885,21 @@ export function App({ platform }: { platform: Platform }) {
             </button>
             <button onClick={() => setOpen(false)} data-tip="Close (Esc)">✕</button>
           </div>
-          <div className="cg-toolbar" style={{ borderTop: 0, paddingTop: 0 }}>
+          {platform.capabilities.search && status.kind === 'ready' && searchOpen && (
+            <div className="cg-toolbar cg-search-row">
+              <SearchBox
+                query={searchQuery}
+                onQuery={setSearchQuery}
+                matchCount={matches.length}
+                activeIndex={clampedIndex}
+                onPrev={() => stepMatch(-1)}
+                onNext={() => stepMatch(1)}
+                onClose={closeSearch}
+                inputRef={searchInputRef}
+              />
+            </div>
+          )}
+          <div className="cg-toolbar cg-status-row">
             <span className="cg-status">
               {status.kind === 'loading' && 'Loading…'}
               {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}
@@ -753,6 +917,12 @@ export function App({ platform }: { platform: Platform }) {
               previewIds={previewIds}
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
+              searchActive={searchActive}
+              searchQuery={searchQuery}
+              matchIds={matchIds}
+              currentMatchId={currentMatchId}
+              currentMatchOccurrence={currentMatchOccurrence}
+              searchFocusNonce={searchFocusNonce}
               draft={draft}
               locked={draft != null}
               lockReason={

@@ -34,6 +34,16 @@ type CgNodeData = {
   width: number;
   height: number;
   isPreview: boolean;
+  /** A search query is in effect — dim non-matching cards. */
+  searchActive: boolean;
+  /** The active query text — highlighted within this node's expanded preview. */
+  searchQuery: string;
+  /** This card's text matches the current query. */
+  isMatch: boolean;
+  /** This is the match the stepper is currently sitting on. */
+  isCurrentMatch: boolean;
+  /** On the current match: which body occurrence to scroll to/emphasize. */
+  matchOccurrence?: number;
   /** A draft is open — disable this node's quick-action buttons. */
   locked: boolean;
   /** Tooltip explaining why the actions are disabled (shown on hover when locked). */
@@ -117,6 +127,11 @@ const NODE_TYPES = {
         node={data.node}
         jumping={data.jumping}
         isPreview={data.isPreview}
+        searchActive={data.searchActive}
+        searchQuery={data.searchQuery}
+        isMatch={data.isMatch}
+        isCurrentMatch={data.isCurrentMatch}
+        matchOccurrence={data.matchOccurrence}
         locked={data.locked}
         lockReason={data.lockReason}
         style={{ width: data.width, height: data.height }}
@@ -197,6 +212,27 @@ function CanvasControls({ bounds }: { bounds: Rect | null }) {
   );
 }
 
+/**
+ * Pans the viewport to the current search match on each explicit step. Lives
+ * inside the ReactFlow provider (so it can use `useReactFlow`) and fires only
+ * when `nonce` changes — i.e. on navigation, never on typing — preserving the
+ * user's current zoom so the canvas glides rather than jumps.
+ */
+function SearchFocus({ nonce, bounds }: { nonce?: number; bounds: Rect | null }) {
+  const { setCenter, getZoom } = useReactFlow();
+  const boundsRef = useRef(bounds);
+  boundsRef.current = bounds;
+  useEffect(() => {
+    const b = boundsRef.current;
+    if (nonce == null || !b) return;
+    void setCenter(b.x + b.width / 2, b.y + b.height / 2, { zoom: getZoom(), duration: 400 });
+    // Intentionally keyed only on `nonce`: pan on a step, not when `bounds`
+    // changes as the user types.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nonce]);
+  return null;
+}
+
 export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
@@ -206,6 +242,19 @@ export type GraphCanvasProps = {
   previewIds: Set<string>;
   onToggleInlinePreview: (node: DisplayNode) => void;
   jumpingId?: string | null;
+  /** A search query is in effect — dim non-matching cards. */
+  searchActive?: boolean;
+  /** The active query text — highlighted within an expanded match's preview. */
+  searchQuery?: string;
+  /** Ids of cards matching the current search query. */
+  matchIds?: Set<string>;
+  /** Id of the match the stepper is currently on (strongest emphasis). */
+  currentMatchId?: string | null;
+  /** Occurrence index within the current match node (multi-hit nodes). */
+  currentMatchOccurrence?: number;
+  /** Bumped on each explicit search step — pans the viewport to the current match
+   *  (only on navigation, so typing never moves the canvas). */
+  searchFocusNonce?: number;
   /** The floating draft node (edit / follow-up / regenerate), if open. */
   draft: DraftState | null;
   /** A draft is open anywhere — disable all real nodes' quick-action buttons. */
@@ -228,6 +277,12 @@ export function GraphCanvas({
   previewIds,
   onToggleInlinePreview,
   jumpingId,
+  searchActive = false,
+  searchQuery = '',
+  matchIds,
+  currentMatchId,
+  currentMatchOccurrence,
+  searchFocusNonce,
   draft,
   locked,
   lockReason,
@@ -374,6 +429,14 @@ export function GraphCanvas({
     return null;
   }, [laid, tree]);
 
+  // Rect of the current search match — what SearchFocus pans the viewport to on
+  // each step. Null when there's no current match.
+  const currentMatchBounds = useMemo<Rect | null>(() => {
+    if (!currentMatchId) return null;
+    const n = laid.find((l) => l.id === currentMatchId);
+    return n ? { x: n.x, y: n.y, width: n.width, height: n.height } : null;
+  }, [laid, currentMatchId]);
+
   // ---- Real message nodes ----
   // Referentially stable while a draft streams (no draft-content deps), so React
   // Flow doesn't re-render every card on each streamed token.
@@ -399,6 +462,11 @@ export function GraphCanvas({
             width: n.width,
             height: n.height,
             isPreview: previewIds.has(dn.id),
+            searchActive,
+            searchQuery,
+            isMatch: matchIds?.has(dn.id) ?? false,
+            isCurrentMatch: currentMatchId === dn.id,
+            matchOccurrence: currentMatchId === dn.id ? currentMatchOccurrence : undefined,
             locked,
             lockReason,
             targetPos,
@@ -415,7 +483,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, currentMatchOccurrence, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).
@@ -533,6 +601,7 @@ export function GraphCanvas({
           <Controls showZoom={false} showFitView={false} showInteractive={false}>
             <CanvasControls bounds={recentBounds} />
           </Controls>
+          <SearchFocus nonce={searchFocusNonce} bounds={currentMatchBounds} />
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
