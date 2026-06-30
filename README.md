@@ -19,6 +19,12 @@ Open it from the **Convograph** pill next to the chat composer, or press **⌘/C
 **Navigate**
 - Click a node's role chip — *You* / *Claude* / *ChatGPT* — to switch to that branch and scroll the native chat to that message.
 
+**Search every branch** *(claude.ai)*
+- Open the search bar with the **magnifier icon** (top‑right) or **⌘/Ctrl + F**; close it with the icon, **✕**, or **Esc**.
+- Searches the **whole conversation — every branch**, including hidden ones the native chat can't show — across message text, code, generated artifacts, uploaded‑file contents, and widget source.
+- Counts **every occurrence**, not just every message; step through them with the **◂ ▸** arrows (or **Enter** / **Shift + Enter**).
+- Matches stand out in the graph in a color distinct from the active path; stepping opens the node's inline reader and scrolls to and highlights each hit in turn — all on the graph, without disturbing the native chat.
+
 **Read in place**
 - Double‑click a node for an inline reader.
 - Pop out draggable, resizable floating preview windows (open several at once; font size is shared across them).
@@ -33,8 +39,8 @@ Open it from the **Convograph** pill next to the chat composer, or press **⌘/C
 
 | Platform | Hosts | Notes |
 | --- | --- | --- |
-| **claude.ai** | `claude.ai` | Full support. Branch switching persists server‑side, and jump‑to‑message works for any message in the thread. |
-| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize, branch‑switch, and edit / follow‑up / regenerate via ChatGPT's native UI. Branch selection is local and re‑applied on reload. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first. |
+| **claude.ai** | `claude.ai` | Full support. Branch switching persists server‑side, jump‑to‑message works for any message in the thread, and whole‑conversation search spans every branch. |
+| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize, branch‑switch, and edit / follow‑up / regenerate via ChatGPT's native UI. Branch selection is local and re‑applied on reload. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first. (Cross‑branch search is claude.ai‑only for now.) |
 
 ## Installation
 
