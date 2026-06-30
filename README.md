@@ -19,7 +19,7 @@ Open it from the **Convograph** pill next to the chat composer, or press **⌘/C
 **Navigate**
 - Click a node's role chip — *You* / *Claude* / *ChatGPT* — to switch to that branch and scroll the native chat to that message.
 
-**Search every branch** *(claude.ai)*
+**Search every branch**
 - Open the search bar with the **magnifier icon** (top‑right) or **⌘/Ctrl + F**; close it with the icon, **✕**, or **Esc**.
 - Searches the **whole conversation — every branch**, including hidden ones the native chat can't show — across message text, code, generated artifacts, uploaded‑file contents, and widget source.
 - Counts **every occurrence**, not just every message; step through them with the **◂ ▸** arrows (or **Enter** / **Shift + Enter**).
@@ -40,7 +40,7 @@ Open it from the **Convograph** pill next to the chat composer, or press **⌘/C
 | Platform | Hosts | Notes |
 | --- | --- | --- |
 | **claude.ai** | `claude.ai` | Full support. Branch switching persists server‑side, jump‑to‑message works for any message in the thread, and whole‑conversation search spans every branch. |
-| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize, branch‑switch, and edit / follow‑up / regenerate via ChatGPT's native UI. Branch selection is local and re‑applied on reload. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first. (Cross‑branch search is claude.ai‑only for now.) |
+| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize, branch‑switch, edit / follow‑up / regenerate via ChatGPT's native UI, and whole‑conversation search. Branch selection is local and re‑applied on reload. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first; search, though, reads the fetched tree, so it finds matches on every branch even when they're outside the chat's loaded window. |
 
 ## Installation
 

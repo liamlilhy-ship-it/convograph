@@ -3,6 +3,7 @@ import { adaptChatGptConversation } from '../platforms/chatgpt/adapter';
 import type { ChatGptConversation } from '../platforms/chatgpt/types';
 import { buildTree } from '../tree/buildTree';
 import { buildDisplayTree } from '../tree/displayTree';
+import { searchNodes } from '../tree/search';
 
 /**
  * A ChatGPT tree with the wrapper nodes the adapter must strip (synthetic root,
@@ -107,6 +108,35 @@ describe('adaptChatGptConversation', () => {
     expect(u1Questions.every((n) => n.siblingCount === 2 && n.branchKind === 'regenerate')).toBe(true);
     // The active path threads the q+a of the active turns.
     expect(display.activePath.length).toBeGreaterThan(0);
+  });
+});
+
+// End-to-end: the whole-conversation search runs over the adapted ChatGPT tree,
+// proving ChatGPT's data feeds the (platform-agnostic) search — including hidden
+// off-path branches and per-occurrence counting — now that capabilities.search is on.
+describe('search over an adapted ChatGPT tree', () => {
+  const display = buildDisplayTree(buildTree(adaptChatGptConversation(raw, 'conv-1')));
+
+  it('finds a match on a HIDDEN regenerate branch (off the active path)', () => {
+    // a1b ("Four") is the off-path regenerate of a1 ("4") — unreachable in the
+    // native chat, but search reads the fetched tree so it still surfaces.
+    const matches = searchNodes(display.orderedNodes, 'Four');
+    expect(matches.length).toBe(1);
+    expect(matches[0]!.node.role).toBe('assistant');
+    expect(matches[0]!.node.fullText).toContain('Four');
+    expect(matches[0]!.node.isOnActivePath).toBe(false);
+  });
+
+  it('counts every occurrence in a ChatGPT message body', () => {
+    // The question "And 3+3?" contains "3" twice → two per-occurrence matches.
+    const matches = searchNodes(display.orderedNodes, '3');
+    expect(matches.length).toBe(2);
+    expect(matches.every((m) => m.node.fullText.includes('3+3'))).toBe(true);
+    expect(matches.map((m) => m.occurrence)).toEqual([0, 1]);
+  });
+
+  it('gives ChatGPT nodes non-empty fullText (so counting + highlight work)', () => {
+    expect(display.orderedNodes.some((n) => n.fullText.length > 0)).toBe(true);
   });
 });
 

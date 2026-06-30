@@ -185,8 +185,8 @@ describe('nodeSearchText', () => {
 });
 
 describe('search capability gating', () => {
-  it('is enabled for Claude and disabled for ChatGPT', () => {
+  it('is enabled for Claude and ChatGPT', () => {
     expect(ClaudePlatform.capabilities.search).toBe(true);
-    expect(ChatGptPlatform.capabilities.search).toBe(false);
+    expect(ChatGptPlatform.capabilities.search).toBe(true);
   });
 });

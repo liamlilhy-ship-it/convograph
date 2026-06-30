@@ -10,6 +10,11 @@
   --cg-border-strong: rgba(13, 13, 13, 0.22);
   --cg-accent: #10a37f;
   --cg-accent-soft: rgba(16, 163, 127, 0.14);
+  /* Search-match highlight — a blue, deliberately distinct from the green accent
+     so a search hit (node ring + in-preview text marks) never reads as the
+     (accent-colored) active path. */
+  --cg-find: #2f6fe0;
+  --cg-find-soft: rgba(47, 111, 224, 0.18);
   /* Per-role node surfaces — Q = faint grey wash, A = clean white. */
   --cg-node-q-bg: #f7f7f8;
   --cg-node-a-bg: #ffffff;
@@ -33,6 +38,8 @@
   --cg-border-strong: rgba(236, 236, 236, 0.24);
   --cg-accent: #19c37d;
   --cg-accent-soft: rgba(25, 195, 125, 0.22);
+  --cg-find: #6aa3ff;
+  --cg-find-soft: rgba(106, 163, 255, 0.28);
   --cg-node-q-bg: #2f2f2f;
   --cg-node-a-bg: #2a2a2a;
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
