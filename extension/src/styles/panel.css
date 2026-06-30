@@ -259,13 +259,19 @@
   box-shadow: 0 0 0 3px var(--cg-find), 0 0 16px 3px var(--cg-find-soft), var(--cg-shadow);
 }
 /* Matched text inside an expanded preview — the "find" color so it ties back to
-   the node ring. */
+   the node ring. Every hit gets a soft wash; the one the stepper is on (when a
+   node holds several) is filled so the user sees which match the switch is on. */
 mark.cg-search-hit {
   background: var(--cg-find-soft);
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
   box-shadow: inset 0 -1px 0 var(--cg-find);
+}
+mark.cg-search-hit[data-current="true"] {
+  background: var(--cg-find);
+  color: var(--cg-on-accent);
+  box-shadow: none;
 }
 /* Question vs answer: distinct soft surface tints + an accent top edge on
    questions. Tints stay light so dark body text remains fully readable. */

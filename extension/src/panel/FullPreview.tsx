@@ -20,10 +20,10 @@ function clearHighlights(root: HTMLElement): void {
 }
 
 /** Wrap every occurrence of `q` (already lowercased) in `el` with a highlight
- *  mark, recording the first one. Only called on `.cg-pv-md` blocks — which React
- *  renders via dangerouslySetInnerHTML and treats as opaque — so mutating their
- *  DOM doesn't fight React's reconciliation. */
-function highlightIn(el: HTMLElement, q: string, found: { first: HTMLElement | null }): void {
+ *  mark, appending each to `marks` (in document order). Only called on `.cg-pv-md`
+ *  blocks — which React renders via dangerouslySetInnerHTML and treats as opaque —
+ *  so mutating their DOM doesn't fight React's reconciliation. */
+function highlightIn(el: HTMLElement, q: string, marks: HTMLElement[]): void {
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
@@ -39,7 +39,7 @@ function highlightIn(el: HTMLElement, q: string, found: { first: HTMLElement | n
       mark.className = 'cg-search-hit';
       mark.textContent = s.slice(idx, idx + q.length);
       frag.appendChild(mark);
-      if (!found.first) found.first = mark;
+      marks.push(mark);
       cur = idx + q.length;
     }
     if (cur < s.length) frag.appendChild(document.createTextNode(s.slice(cur)));
@@ -66,7 +66,7 @@ export function FullPreview({
   node,
   onOpenMedia,
   highlightQuery,
-  scrollToMatch,
+  currentOccurrence,
 }: {
   node: DisplayNode;
   /** Open a clickable generated document (artifact with inline content) in a
@@ -75,8 +75,9 @@ export function FullPreview({
   onOpenMedia?: (item: FooterItem) => void;
   /** When set, highlight occurrences of this query in the message body. */
   highlightQuery?: string;
-  /** Scroll the first highlighted occurrence into view (the current search match). */
-  scrollToMatch?: boolean;
+  /** On the current search match: which highlighted occurrence to emphasize and
+   *  scroll into view. Undefined on non-current cards (highlight only, no scroll). */
+  currentOccurrence?: number;
 }) {
   const { assistantLabel, AssistantIcon } = usePlatformUI();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -106,25 +107,27 @@ export function FullPreview({
 
   const empty = body.length === 0 && !images.length && !artifacts.length && !files.length;
 
-  // Highlight the search query inside the rendered markdown, and (for the current
-  // match) scroll the first hit into view. Scrolls ONLY the preview container —
-  // never the underlying chat page — and corrects for the canvas zoom transform.
+  // Highlight every occurrence of the query in the rendered markdown. On the
+  // current match, emphasize the active occurrence and scroll it into view —
+  // scrolling ONLY the preview container (never the underlying chat page), with a
+  // correction for the canvas zoom transform.
   useEffect(() => {
     const root = contentRef.current;
     if (!root) return;
     clearHighlights(root);
     const q = (highlightQuery ?? '').trim().toLowerCase();
     if (!q) return;
-    const found = { first: null as HTMLElement | null };
-    root.querySelectorAll<HTMLElement>('.cg-pv-md').forEach((el) => highlightIn(el, q, found));
-    const first = found.first;
-    if (first && scrollToMatch) {
+    const marks: HTMLElement[] = [];
+    root.querySelectorAll<HTMLElement>('.cg-pv-md').forEach((el) => highlightIn(el, q, marks));
+    if (currentOccurrence != null && marks.length) {
+      const target = marks[Math.min(currentOccurrence, marks.length - 1)]!;
+      target.setAttribute('data-current', 'true');
       const container = root.closest('.cg-node-pv-body') as HTMLElement | null;
       if (container) {
         const cRect = container.getBoundingClientRect();
-        const mRect = first.getBoundingClientRect();
+        const mRect = target.getBoundingClientRect();
         // getBoundingClientRect is post-zoom; scrollTop is content px. Convert.
-        const scale = first.offsetHeight ? mRect.height / first.offsetHeight : 1;
+        const scale = target.offsetHeight ? mRect.height / target.offsetHeight : 1;
         const deltaClient = mRect.top - cRect.top - cRect.height / 2 + mRect.height / 2;
         container.scrollTo({ top: container.scrollTop + deltaClient / (scale || 1), behavior: 'smooth' });
       }
@@ -132,7 +135,7 @@ export function FullPreview({
     return () => {
       if (contentRef.current) clearHighlights(contentRef.current);
     };
-  }, [highlightQuery, scrollToMatch, body]);
+  }, [highlightQuery, currentOccurrence, body]);
 
   return (
     <div className="cg-pv-content" ref={contentRef}>

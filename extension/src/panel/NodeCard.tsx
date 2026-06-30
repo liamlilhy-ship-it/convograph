@@ -71,6 +71,8 @@ export type NodeCardProps = HoverApi & {
   isMatch?: boolean;
   /** This is the match the stepper currently sits on (strongest ring). */
   isCurrentMatch?: boolean;
+  /** On the current match: which body occurrence to scroll to / emphasize. */
+  matchOccurrence?: number;
   /** A draft/generation is open somewhere — disable all quick-action buttons so a
    *  second completion can't fire concurrently (claude.ai rejects those). */
   locked?: boolean;
@@ -103,6 +105,7 @@ export function NodeCard({
   searchQuery,
   isMatch,
   isCurrentMatch,
+  matchOccurrence,
   locked,
   lockReason,
   onPreview,
@@ -263,7 +266,7 @@ export function NodeCard({
             node={node}
             onOpenMedia={onOpenMedia}
             highlightQuery={searchActive ? searchQuery : undefined}
-            scrollToMatch={isCurrentMatch}
+            currentOccurrence={isCurrentMatch ? matchOccurrence ?? 0 : undefined}
           />
         </div>
       ) : (

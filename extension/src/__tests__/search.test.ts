@@ -123,6 +123,49 @@ describe('searchNodes', () => {
   });
 });
 
+describe('per-occurrence matches', () => {
+  it('emits one match per body occurrence, indexed in document order', () => {
+    const out = searchNodes([makeNode('a', 'foo and foo and foo')], 'foo');
+    expect(out.length).toBe(3);
+    expect(out.map((m) => m.id)).toEqual(['a', 'a', 'a']);
+    expect(out.map((m) => m.occurrence)).toEqual([0, 1, 2]);
+  });
+
+  it('totals body occurrences across nodes (drives the match count)', () => {
+    const out = searchNodes(
+      [makeNode('a', 'alpha alpha'), makeNode('b', 'alpha')],
+      'alpha',
+    );
+    expect(out.length).toBe(3);
+  });
+
+  it('counts an artifact-only match once, not per occurrence', () => {
+    const out = searchNodes(
+      [
+        makeNode('a', 'no hits in the body', {
+          kinds: [{ kind: 'artifact', count: 1, items: [{ name: 'doc', content: 'zed zed zed' }] }],
+        }),
+      ],
+      'zed',
+    );
+    expect(out.length).toBe(1);
+    expect(out[0]!.occurrence).toBe(0);
+  });
+
+  it('counts body occurrences and ignores extra hits in a same-node attachment', () => {
+    const out = searchNodes(
+      [
+        makeNode('a', 'beta here and beta there', {
+          kinds: [{ kind: 'attachment', count: 1, files: [{ name: 'f', content: 'beta beta beta' }] }],
+        }),
+      ],
+      'beta',
+    );
+    expect(out.length).toBe(2);
+    expect(out.map((m) => m.occurrence)).toEqual([0, 1]);
+  });
+});
+
 describe('nodeSearchText', () => {
   it('concatenates fullText with artifact, file, and widget content', () => {
     const n = makeNode('a', 'prose body', {

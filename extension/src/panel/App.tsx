@@ -548,6 +548,9 @@ export function App({ platform }: { platform: Platform }) {
   // match + the id set the graph dims/rings against.
   const clampedIndex = matches.length ? Math.min(searchIndex, matches.length - 1) : -1;
   const currentMatchId = clampedIndex >= 0 ? matches[clampedIndex]!.id : null;
+  // Which occurrence within the current node the stepper is on — drives the
+  // in-preview scroll/emphasis when a node holds several hits.
+  const currentMatchOccurrence = clampedIndex >= 0 ? matches[clampedIndex]!.occurrence : 0;
   const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
   const searchActive = searchQuery.trim().length > 0;
 
@@ -895,6 +898,7 @@ export function App({ platform }: { platform: Platform }) {
               searchQuery={searchQuery}
               matchIds={matchIds}
               currentMatchId={currentMatchId}
+              currentMatchOccurrence={currentMatchOccurrence}
               searchFocusNonce={searchFocusNonce}
               draft={draft}
               locked={draft != null}

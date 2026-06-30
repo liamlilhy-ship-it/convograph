@@ -42,6 +42,8 @@ type CgNodeData = {
   isMatch: boolean;
   /** This is the match the stepper is currently sitting on. */
   isCurrentMatch: boolean;
+  /** On the current match: which body occurrence to scroll to/emphasize. */
+  matchOccurrence?: number;
   /** A draft is open — disable this node's quick-action buttons. */
   locked: boolean;
   /** Tooltip explaining why the actions are disabled (shown on hover when locked). */
@@ -129,6 +131,7 @@ const NODE_TYPES = {
         searchQuery={data.searchQuery}
         isMatch={data.isMatch}
         isCurrentMatch={data.isCurrentMatch}
+        matchOccurrence={data.matchOccurrence}
         locked={data.locked}
         lockReason={data.lockReason}
         style={{ width: data.width, height: data.height }}
@@ -247,6 +250,8 @@ export type GraphCanvasProps = {
   matchIds?: Set<string>;
   /** Id of the match the stepper is currently on (strongest emphasis). */
   currentMatchId?: string | null;
+  /** Occurrence index within the current match node (multi-hit nodes). */
+  currentMatchOccurrence?: number;
   /** Bumped on each explicit search step — pans the viewport to the current match
    *  (only on navigation, so typing never moves the canvas). */
   searchFocusNonce?: number;
@@ -276,6 +281,7 @@ export function GraphCanvas({
   searchQuery = '',
   matchIds,
   currentMatchId,
+  currentMatchOccurrence,
   searchFocusNonce,
   draft,
   locked,
@@ -460,6 +466,7 @@ export function GraphCanvas({
             searchQuery,
             isMatch: matchIds?.has(dn.id) ?? false,
             isCurrentMatch: currentMatchId === dn.id,
+            matchOccurrence: currentMatchId === dn.id ? currentMatchOccurrence : undefined,
             locked,
             lockReason,
             targetPos,
@@ -476,7 +483,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, currentMatchOccurrence, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).
