@@ -9,7 +9,7 @@ export type SearchBoxProps = {
   activeIndex: number;
   onPrev: () => void;
   onNext: () => void;
-  /** Clear the query and blur (Esc / ✕). */
+  /** Close the search bar (Esc / ✕) — also clears the query. */
   onClose: () => void;
   inputRef: RefObject<HTMLInputElement>;
 };
@@ -79,11 +79,9 @@ export function SearchBox({
       >
         ▸
       </button>
-      {hasQuery && (
-        <button onClick={onClose} data-tip="Clear search (Esc)" aria-label="Clear search">
-          ✕
-        </button>
-      )}
+      <button onClick={onClose} data-tip="Close search (Esc)" aria-label="Close search">
+        ✕
+      </button>
     </div>
   );
 }

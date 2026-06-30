@@ -13,7 +13,7 @@ import { PlatformApiError } from '../platforms/errors';
 import { PlatformUIProvider, assistantIconFor, type PlatformUI } from './platformUI';
 import type { DraftKind, FooterItem } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
-import { FullscreenIcon, ExitFullscreenIcon } from './icons';
+import { FullscreenIcon, ExitFullscreenIcon, SearchIcon } from './icons';
 
 /**
  * A pending quick-action draft. Drives the floating draft node on the canvas and
@@ -95,8 +95,10 @@ export function App({ platform }: { platform: Platform }) {
   const [dragging, setDragging] = useState(false);
   const [jumping, setJumping] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  // Whole-conversation search (Claude only). `searchQuery` filters the tree;
-  // `searchIndex` is the current match the stepper sits on.
+  // Whole-conversation search (Claude only). `searchOpen` toggles the search bar
+  // from the toolbar; `searchQuery` filters the tree; `searchIndex` is the current
+  // match the stepper sits on.
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchIndex, setSearchIndex] = useState(0);
   // Bumped on each explicit step so the graph pans to the current match — only on
@@ -270,6 +272,7 @@ export function App({ platform }: { platform: Platform }) {
       setDraft(null);
       setFullscreen(false);
       selectedLeafRef.current = null;
+      setSearchOpen(false);
       setSearchQuery('');
       searchAutoExpandedRef.current = null;
     }
@@ -433,19 +436,15 @@ export function App({ platform }: { platform: Platform }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Esc steps out one level: full-screen → side panel → closed.
+      // Esc steps out one level: search bar → full-screen → side panel → closed.
       if (e.key === 'Escape' && open) {
-        // If the in-panel search has focus, Esc clears + blurs it (keeping the
-        // graph open) instead of stepping out. This listener is capture-phase, so
+        // An open search bar is the innermost layer — Esc closes it first (keeping
+        // the graph open) before stepping out. This listener is capture-phase, so
         // it must own the case — the input's own onKeyDown runs too late to win.
-        const sEl = searchInputRef.current;
-        const searchFocused =
-          !!sEl && (sEl.getRootNode() as ShadowRoot | Document).activeElement === sEl;
-        if (searchFocused) {
+        if (searchOpen) {
           e.preventDefault();
           e.stopPropagation();
-          setSearchQuery('');
-          sEl.blur();
+          setSearchOpen(false);
           return;
         }
         if (fullscreen) setFullscreen(false);
@@ -455,9 +454,9 @@ export function App({ platform }: { platform: Platform }) {
         e.preventDefault();
         setOpen((v) => !v);
       }
-      // While the graph is open on a search-capable platform, ⌘/Ctrl+F focuses
-      // the in-panel search instead of the browser's native find. Native find
-      // still works when the panel is closed.
+      // While the graph is open on a search-capable platform, ⌘/Ctrl+F opens (and
+      // focuses) the in-panel search instead of the browser's native find. Native
+      // find still works when the panel is closed.
       if (
         open &&
         platform.capabilities.search &&
@@ -466,13 +465,14 @@ export function App({ platform }: { platform: Platform }) {
         e.key.toLowerCase() === 'f'
       ) {
         e.preventDefault();
+        setSearchOpen(true);
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, fullscreen, platform]);
+  }, [open, fullscreen, platform, searchOpen]);
 
   const handleNodeClick = useCallback(
     async (node: DisplayNode) => {
@@ -614,10 +614,20 @@ export function App({ platform }: { platform: Platform }) {
     [matches, clampedIndex, focusPreviewForSearch],
   );
 
-  const clearSearch = useCallback(() => {
-    setSearchQuery('');
-    searchInputRef.current?.blur();
-  }, []);
+  const toggleSearch = useCallback(() => setSearchOpen((v) => !v), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  // Opening the search bar focuses + selects its input; closing it clears the
+  // query (which resets highlights and collapses any search-driven preview via the
+  // query-change effect). Centralized here so every open/close path behaves alike.
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    } else {
+      setSearchQuery('');
+    }
+  }, [searchOpen]);
 
   // ---- Quick actions via a floating draft node ----
   // Runs the completion for a draft that has flipped to `generating`. Keeps the
@@ -846,6 +856,17 @@ export function App({ platform }: { platform: Platform }) {
           <div className="cg-toolbar cg-toolbar-main">
             <h1>Conversation graph</h1>
             <div className="cg-spacer" />
+            {platform.capabilities.search && status.kind === 'ready' && (
+              <button
+                className="cg-iconbtn"
+                onClick={toggleSearch}
+                data-tip={searchOpen ? 'Close search (⌘F)' : 'Search all branches (⌘F)'}
+                aria-label="Search all branches"
+                aria-pressed={searchOpen}
+              >
+                <SearchIcon size={14} />
+              </button>
+            )}
             {openPreviews.length > 1 && (
               <button onClick={tidyPreviews} data-tip="Tidy previews">⊞</button>
             )}
@@ -864,8 +885,8 @@ export function App({ platform }: { platform: Platform }) {
             </button>
             <button onClick={() => setOpen(false)} data-tip="Close (Esc)">✕</button>
           </div>
-          <div className="cg-toolbar" style={{ borderTop: 0, paddingTop: 0 }}>
-            {platform.capabilities.search && status.kind === 'ready' && (
+          {platform.capabilities.search && status.kind === 'ready' && searchOpen && (
+            <div className="cg-toolbar cg-search-row">
               <SearchBox
                 query={searchQuery}
                 onQuery={setSearchQuery}
@@ -873,10 +894,12 @@ export function App({ platform }: { platform: Platform }) {
                 activeIndex={clampedIndex}
                 onPrev={() => stepMatch(-1)}
                 onNext={() => stepMatch(1)}
-                onClose={clearSearch}
+                onClose={closeSearch}
                 inputRef={searchInputRef}
               />
-            )}
+            </div>
+          )}
+          <div className="cg-toolbar cg-status-row">
             <span className="cg-status">
               {status.kind === 'loading' && 'Loading…'}
               {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}

@@ -138,9 +138,23 @@
   font-size: 11px;
   color: var(--cg-fg-muted);
 }
+/* The message-count caption: keep the toolbar's even 10px top/bottom padding (it
+   used to zero its top, cramming it under the title) but drop the band border so
+   it reads as a quiet sub-line that flows into the canvas, not a boxed row. */
+.cg-status-row {
+  border-bottom: none;
+}
+
+/* The toggled-open search bar is its own `.cg-toolbar` row, so it inherits the
+   even 10px top/bottom padding (the old row zeroed its top, cramming it against
+   the title). Raised so the stepper/close tooltips paint over the status row. */
+.cg-search-row {
+  position: relative;
+  z-index: 1;
+}
 
 /* Whole-conversation search row (Claude only). The input grows; the counter +
-   stepper sit to its right. Stepper/clear buttons reuse `.cg-toolbar button`. */
+   stepper sit to its right. Stepper/close buttons reuse `.cg-toolbar button`. */
 .cg-search {
   display: flex;
   align-items: center;
