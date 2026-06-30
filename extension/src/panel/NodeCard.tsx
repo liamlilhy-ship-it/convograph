@@ -65,6 +65,8 @@ export type NodeCardProps = HoverApi & {
   isPreview?: boolean;
   /** A search query is in effect — non-matching cards are dimmed. */
   searchActive?: boolean;
+  /** The active query text — highlighted inside this node's expanded preview. */
+  searchQuery?: string;
   /** This card's text matches the current search query. */
   isMatch?: boolean;
   /** This is the match the stepper currently sits on (strongest ring). */
@@ -98,6 +100,7 @@ export function NodeCard({
   jumping,
   isPreview,
   searchActive,
+  searchQuery,
   isMatch,
   isCurrentMatch,
   locked,
@@ -256,7 +259,12 @@ export function NodeCard({
       </div>
       {isPreview ? (
         <div className="cg-node-pv-body nowheel nopan">
-          <FullPreview node={node} onOpenMedia={onOpenMedia} />
+          <FullPreview
+            node={node}
+            onOpenMedia={onOpenMedia}
+            highlightQuery={searchActive ? searchQuery : undefined}
+            scrollToMatch={isCurrentMatch}
+          />
         </div>
       ) : (
         <>

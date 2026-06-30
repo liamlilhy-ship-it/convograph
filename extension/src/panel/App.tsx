@@ -105,6 +105,8 @@ export function App({ platform }: { platform: Platform }) {
   // Whether the user has navigated yet for the current query. The FIRST step lands
   // on the already-highlighted match (index 0) instead of skipping past it.
   const searchVisitedRef = useRef(false);
+  // The single node the search auto-expanded (null = none / it was already open).
+  const searchAutoExpandedRef = useRef<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [openPreviews, setOpenPreviews] = useState<OpenPreview[]>([]);
   // Nodes currently expanded into an in-place ("inline") preview. Multiple may be
@@ -269,6 +271,7 @@ export function App({ platform }: { platform: Platform }) {
       setFullscreen(false);
       selectedLeafRef.current = null;
       setSearchQuery('');
+      searchAutoExpandedRef.current = null;
     }
   }, [open]);
 
@@ -548,17 +551,53 @@ export function App({ platform }: { platform: Platform }) {
   const matchIds = useMemo(() => new Set(matches.map((m) => m.id)), [matches]);
   const searchActive = searchQuery.trim().length > 0;
 
+  // Auto-expand the current match's in-place preview while stepping, so the
+  // matched text can be scrolled to + highlighted. Only ONE node is search-opened
+  // at a time; this ref holds it so leaving restores the node's prior fold state —
+  // a node WE opened re-folds, a node the user already had open stays open.
+  const focusPreviewForSearch = useCallback(
+    (nodeId: string) => {
+      const auto = searchAutoExpandedRef.current;
+      if (auto === nodeId) return; // already search-expanded this node
+      // Track for revert only if it wasn't already open (then we re-fold it later).
+      searchAutoExpandedRef.current = previewIds.has(nodeId) ? null : nodeId;
+      setPreviewIds((prev) => {
+        const next = new Set(prev);
+        if (auto && auto !== nodeId) next.delete(auto); // restore the previous node's fold
+        next.add(nodeId);
+        return next;
+      });
+    },
+    [previewIds],
+  );
+
+  // Collapse whatever the search auto-expanded, leaving user-opened previews intact.
+  const endSearchPreview = useCallback(() => {
+    const auto = searchAutoExpandedRef.current;
+    searchAutoExpandedRef.current = null;
+    if (!auto) return;
+    setPreviewIds((prev) => {
+      if (!prev.has(auto)) return prev;
+      const next = new Set(prev);
+      next.delete(auto);
+      return next;
+    });
+  }, []);
+
   // Reset the stepper to the first match whenever the query (or the loaded
-  // conversation) changes, so a new search starts at the top (un-visited).
+  // conversation) changes, so a new search starts at the top (un-visited). Also
+  // drop any search-driven preview, since navigation restarts.
   useEffect(() => {
     setSearchIndex(0);
     searchVisitedRef.current = false;
-  }, [searchQuery, status.kind === 'ready' ? status.convId : null]);
+    endSearchPreview();
+  }, [searchQuery, status.kind === 'ready' ? status.convId : null, endSearchPreview]);
 
-  // Step through matches and jump to the landing one — reusing the node-click
-  // path, which branch-switches to off-path matches and scrolls the chat. The
-  // first step focuses the current match (index 0) without advancing; later steps
-  // move (wrapping). Each call bumps the focus nonce so the graph pans to it.
+  // Step through matches and focus the landing one ON THE CANVAS ONLY — no branch
+  // switch, no native-chat scroll (search is non-destructive browsing). The first
+  // step focuses the current match (index 0) without advancing; later steps move
+  // (wrapping). Each call bumps the focus nonce (graph pans to it) and auto-expands
+  // its preview (which scrolls to + highlights the matched text).
   const stepMatch = useCallback(
     (delta: 1 | -1) => {
       if (!matches.length) return;
@@ -567,9 +606,9 @@ export function App({ platform }: { platform: Platform }) {
       searchVisitedRef.current = true;
       setSearchIndex(next);
       setSearchFocusNonce((n) => n + 1);
-      void handleNodeClick(matches[next]!.node);
+      focusPreviewForSearch(matches[next]!.node.id);
     },
-    [matches, clampedIndex, handleNodeClick],
+    [matches, clampedIndex, focusPreviewForSearch],
   );
 
   const clearSearch = useCallback(() => {
@@ -853,6 +892,7 @@ export function App({ platform }: { platform: Platform }) {
               onToggleInlinePreview={toggleInlinePreview}
               jumpingId={jumping}
               searchActive={searchActive}
+              searchQuery={searchQuery}
               matchIds={matchIds}
               currentMatchId={currentMatchId}
               searchFocusNonce={searchFocusNonce}

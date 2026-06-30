@@ -258,6 +258,15 @@
   border-color: var(--cg-find);
   box-shadow: 0 0 0 3px var(--cg-find), 0 0 16px 3px var(--cg-find-soft), var(--cg-shadow);
 }
+/* Matched text inside an expanded preview — the "find" color so it ties back to
+   the node ring. */
+mark.cg-search-hit {
+  background: var(--cg-find-soft);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-shadow: inset 0 -1px 0 var(--cg-find);
+}
 /* Question vs answer: distinct soft surface tints + an accent top edge on
    questions. Tints stay light so dark body text remains fully readable. */
 .cg-node[data-role="human"] {

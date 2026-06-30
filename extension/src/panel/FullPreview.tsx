@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { DisplayNode } from '../tree/displayTree';
 import type { ContentKind, ImageRef, ArtifactRef, FileRef } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
@@ -7,6 +7,45 @@ import { svgDataUri, widgetSrcDoc } from './widgetRender';
 import { UserIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
 import { usePlatformUI } from './platformUI';
 import type { FooterItem } from './NodeCard';
+
+/** Unwrap any search-highlight marks, restoring the original text runs. */
+function clearHighlights(root: HTMLElement): void {
+  root.querySelectorAll('mark.cg-search-hit').forEach((m) => {
+    const parent = m.parentNode;
+    if (!parent) return;
+    while (m.firstChild) parent.insertBefore(m.firstChild, m);
+    parent.removeChild(m);
+    parent.normalize();
+  });
+}
+
+/** Wrap every occurrence of `q` (already lowercased) in `el` with a highlight
+ *  mark, recording the first one. Only called on `.cg-pv-md` blocks — which React
+ *  renders via dangerouslySetInnerHTML and treats as opaque — so mutating their
+ *  DOM doesn't fight React's reconciliation. */
+function highlightIn(el: HTMLElement, q: string, found: { first: HTMLElement | null }): void {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const texts: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
+  for (const tn of texts) {
+    const s = tn.nodeValue ?? '';
+    const lower = s.toLowerCase();
+    if (!lower.includes(q)) continue;
+    const frag = document.createDocumentFragment();
+    let cur = 0;
+    for (let idx = lower.indexOf(q); idx >= 0; idx = lower.indexOf(q, cur)) {
+      if (idx > cur) frag.appendChild(document.createTextNode(s.slice(cur, idx)));
+      const mark = document.createElement('mark');
+      mark.className = 'cg-search-hit';
+      mark.textContent = s.slice(idx, idx + q.length);
+      frag.appendChild(mark);
+      if (!found.first) found.first = mark;
+      cur = idx + q.length;
+    }
+    if (cur < s.length) frag.appendChild(document.createTextNode(s.slice(cur)));
+    tn.parentNode?.replaceChild(frag, tn);
+  }
+}
 
 /** Typed lookup for the (at most one) kind of a given tag in a preview. */
 function kindOf<K extends ContentKind['kind']>(
@@ -26,14 +65,21 @@ function kindOf<K extends ContentKind['kind']>(
 export function FullPreview({
   node,
   onOpenMedia,
+  highlightQuery,
+  scrollToMatch,
 }: {
   node: DisplayNode;
   /** Open a clickable generated document (artifact with inline content) in a
    *  floating window — keeps artifacts clickable in the preview states, matching
    *  the collapsed node footer. */
   onOpenMedia?: (item: FooterItem) => void;
+  /** When set, highlight occurrences of this query in the message body. */
+  highlightQuery?: string;
+  /** Scroll the first highlighted occurrence into view (the current search match). */
+  scrollToMatch?: boolean;
 }) {
   const { assistantLabel, AssistantIcon } = usePlatformUI();
+  const contentRef = useRef<HTMLDivElement>(null);
   const isHuman = node.role === 'human';
   const p = node.preview;
 
@@ -60,8 +106,36 @@ export function FullPreview({
 
   const empty = body.length === 0 && !images.length && !artifacts.length && !files.length;
 
+  // Highlight the search query inside the rendered markdown, and (for the current
+  // match) scroll the first hit into view. Scrolls ONLY the preview container —
+  // never the underlying chat page — and corrects for the canvas zoom transform.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root) return;
+    clearHighlights(root);
+    const q = (highlightQuery ?? '').trim().toLowerCase();
+    if (!q) return;
+    const found = { first: null as HTMLElement | null };
+    root.querySelectorAll<HTMLElement>('.cg-pv-md').forEach((el) => highlightIn(el, q, found));
+    const first = found.first;
+    if (first && scrollToMatch) {
+      const container = root.closest('.cg-node-pv-body') as HTMLElement | null;
+      if (container) {
+        const cRect = container.getBoundingClientRect();
+        const mRect = first.getBoundingClientRect();
+        // getBoundingClientRect is post-zoom; scrollTop is content px. Convert.
+        const scale = first.offsetHeight ? mRect.height / first.offsetHeight : 1;
+        const deltaClient = mRect.top - cRect.top - cRect.height / 2 + mRect.height / 2;
+        container.scrollTo({ top: container.scrollTop + deltaClient / (scale || 1), behavior: 'smooth' });
+      }
+    }
+    return () => {
+      if (contentRef.current) clearHighlights(contentRef.current);
+    };
+  }, [highlightQuery, scrollToMatch, body]);
+
   return (
-    <div className="cg-pv-content">
+    <div className="cg-pv-content" ref={contentRef}>
       <div className="cg-pv-role">
         {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
         {isHuman ? 'You' : assistantLabel}

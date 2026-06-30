@@ -36,6 +36,8 @@ type CgNodeData = {
   isPreview: boolean;
   /** A search query is in effect — dim non-matching cards. */
   searchActive: boolean;
+  /** The active query text — highlighted within this node's expanded preview. */
+  searchQuery: string;
   /** This card's text matches the current query. */
   isMatch: boolean;
   /** This is the match the stepper is currently sitting on. */
@@ -124,6 +126,7 @@ const NODE_TYPES = {
         jumping={data.jumping}
         isPreview={data.isPreview}
         searchActive={data.searchActive}
+        searchQuery={data.searchQuery}
         isMatch={data.isMatch}
         isCurrentMatch={data.isCurrentMatch}
         locked={data.locked}
@@ -238,6 +241,8 @@ export type GraphCanvasProps = {
   jumpingId?: string | null;
   /** A search query is in effect — dim non-matching cards. */
   searchActive?: boolean;
+  /** The active query text — highlighted within an expanded match's preview. */
+  searchQuery?: string;
   /** Ids of cards matching the current search query. */
   matchIds?: Set<string>;
   /** Id of the match the stepper is currently on (strongest emphasis). */
@@ -268,6 +273,7 @@ export function GraphCanvas({
   onToggleInlinePreview,
   jumpingId,
   searchActive = false,
+  searchQuery = '',
   matchIds,
   currentMatchId,
   searchFocusNonce,
@@ -451,6 +457,7 @@ export function GraphCanvas({
             height: n.height,
             isPreview: previewIds.has(dn.id),
             searchActive,
+            searchQuery,
             isMatch: matchIds?.has(dn.id) ?? false,
             isCurrentMatch: currentMatchId === dn.id,
             locked,
@@ -469,7 +476,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, matchIds, currentMatchId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).
