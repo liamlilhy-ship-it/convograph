@@ -1,5 +1,5 @@
 import type { Platform, ThemeName } from '../types';
-import { getOrgId, getConversationTree, setCurrentLeaf, parseConversationIdFromUrl } from './client';
+import { getOrgId, getConversationTree, setCurrentLeaf, parseConversationIdFromUrl, isSupportedSurface } from './client';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './chatClient';
 import { claudeDom } from './dom';
 import { resolveTheme } from '../theme';
@@ -59,9 +59,16 @@ export const ClaudePlatform: Platform = {
   capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: true, edit: true, followup: true, regenerate: true, search: true },
   rootParentUuid: ROOT_PARENT_UUID,
   tokensCss,
+  // claude.ai's layer scale (measured 2026-07): header 10, sidebar 20, tooltips
+  // 30 | menus 120, popovers 130, modals 140. 100 keeps the pill/panel above all
+  // persistent chrome (full-screen still covers the sidebar) while claude.ai's
+  // menus and modals paint on top.
+  hostZIndex: 100,
   dom: claudeDom,
 
   parseConversationId: (href) => parseConversationIdFromUrl(href),
+
+  isSupportedSurface,
 
   async fetchConversation(convId) {
     return getConversationTree(await orgId(), convId);

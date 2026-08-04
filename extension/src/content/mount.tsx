@@ -42,7 +42,7 @@ export function mount(platform: Platform): void {
 
   const host = document.createElement('div');
   host.id = HOST_ID;
-  host.style.cssText = 'all: initial; position: fixed; inset: 0; pointer-events: none; z-index: 2147483645;';
+  host.style.cssText = `all: initial; position: fixed; inset: 0; pointer-events: none; z-index: ${platform.hostZIndex ?? 2147483645};`;
   document.body.appendChild(host);
   // ChatGPT's client render reconciles <body> during hydration/route transitions and
   // discards nodes it didn't create — including our host — so the pill paints once and

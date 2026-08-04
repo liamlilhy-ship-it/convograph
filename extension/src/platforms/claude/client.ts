@@ -73,4 +73,15 @@ export function parseConversationIdFromUrl(href: string = window.location.href):
   return m?.[1] ?? null;
 }
 
+/**
+ * Whether the pill may show on this claude.ai page. Claude Design (`/design…`)
+ * and Claude Code web (`/code…`) are separate apps on the same host with their
+ * own backends (Design: OmeletteService RPC; Code: linear session events) — no
+ * conversation tree exists there, so the pill stays hidden. Every other path
+ * (chat, /new, project pages) keeps the composer-anchored behavior.
+ */
+export function isSupportedSurface(href: string): boolean {
+  return !/^\/(design|code)(\/|$)/.test(new URL(href).pathname);
+}
+
 export { ClaudeApiError };

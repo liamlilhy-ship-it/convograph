@@ -82,9 +82,20 @@ export interface Platform {
   readonly rootParentUuid: string;
   /** Inline CSS of this platform's design tokens, injected at mount. */
   readonly tokensCss: string;
+  /** z-index for the extension's host element. Lets a platform slot the pill and
+   *  panel above its persistent chrome but below its transient layers (menus,
+   *  popovers, modals), so native overlays paint on top. Optional: defaults to
+   *  the near-maximum value (above everything). */
+  readonly hostZIndex?: number;
   readonly dom: PlatformDom;
 
   parseConversationId(href?: string): string | null;
+  /** Whether the toggle pill may show on this page. Lets a platform hide the
+   *  pill on same-host surfaces that have a composer but no readable
+   *  conversation (claude.ai's Design and Code apps). Optional: platforms
+   *  without such surfaces omit it, and the pill shows wherever the composer
+   *  is found. */
+  isSupportedSurface?(href: string): boolean;
   /** Fetch + normalize the conversation (each provider does its own auth). */
   fetchConversation(convId: string): Promise<NormalizedConversation>;
   /** Read the active branch's leaf from the page DOM, for platforms whose server

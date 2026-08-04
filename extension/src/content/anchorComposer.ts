@@ -19,6 +19,7 @@ export function computeAnchor(
   toggleEl: HTMLElement,
   opts: AnchorOpts = {},
 ): AnchorPosition | null {
+  if (platform.isSupportedSurface && !platform.isSupportedSurface(location.href)) return null;
   const composer = platform.dom.findComposer();
   if (!composer) return null;
   const rect = composer.getBoundingClientRect();
