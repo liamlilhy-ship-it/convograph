@@ -4,6 +4,7 @@ import {
   getConversation,
   getNormalizedConversation,
   parseConversationIdFromUrl,
+  isSupportedSurface,
 } from './client';
 import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
 import { detectActiveLeafFromDom } from './activeLeaf';
@@ -76,9 +77,18 @@ export const ChatGptPlatform: Platform = {
   capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: true },
   rootParentUuid: '',
   tokensCss,
+  // ChatGPT's layer model (measured 2026-07): page content lives in root
+  // stacking contexts at z 0 (sticky headers 10-30 inside them); body-level
+  // portals — modals, tooltips, the profile menu — sit at z 50. 40 keeps the
+  // pill/panel above all content while portal overlays paint on top. The
+  // composer "+" menu is z-50 but TRAPPED inside a z-0 context, so no host
+  // z-index can go under it — dom.isObscuredByOverlay handles that one.
+  hostZIndex: 40,
   dom: chatgptDom,
 
   parseConversationId: (href) => parseConversationIdFromUrl(href),
+
+  isSupportedSurface,
   fetchConversation: (convId) => getConversation(convId),
   // ChatGPT's native arrows are client-only, so the active branch lives in the
   // DOM, not the fetched conversation — read it from there (see activeLeaf.ts).

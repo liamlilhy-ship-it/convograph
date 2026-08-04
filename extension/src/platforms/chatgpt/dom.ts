@@ -36,6 +36,15 @@ export const chatgptDom: PlatformDom = {
     return editable.closest('form') ?? editable;
   },
   scrollTopMargin: 72,
+  // ChatGPT's popovers (the composer "+" menu, the model picker, the profile
+  // menu) all mount a `.popover` element and unmount it on close. The "+" menu
+  // is stuck inside a z-0 stacking context (see platform.ts hostZIndex note),
+  // so the pill can't be layered under it — hide the pill while any popover is
+  // open instead. The anchor tracker's MutationObserver re-runs this on
+  // mount/unmount, so the pill returns as soon as the popover closes.
+  isObscuredByOverlay() {
+    return document.querySelector('.popover') !== null;
+  },
   // ChatGPT lazy-loads history (only the few most recent messages are in the
   // DOM) and a programmatic scroll won't fetch older ones — so don't scroll-search.
   scrollSearch: false,

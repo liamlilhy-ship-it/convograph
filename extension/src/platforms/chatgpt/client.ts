@@ -331,3 +331,15 @@ export function parseConversationIdFromUrl(href: string = window.location.href):
   const m = href.match(/\/c\/([0-9a-f-]{36})/i);
   return m?.[1] ?? null;
 }
+
+/**
+ * Whether the pill may show on this chatgpt.com page. The dedicated apps —
+ * Images, Sites, Health, Finances, Codex — have (or gain, once onboarded)
+ * their own prompt boxes that match our composer selector (`/images` even
+ * carries a `#prompt-textarea`) but no conversation tree, so the pill stays
+ * hidden there. Chat surfaces (`/`, `/c/…`, `/g/…/c/…`, project homes) and
+ * plain list pages keep the composer-anchored behavior (default-allow).
+ */
+export function isSupportedSurface(href: string): boolean {
+  return !/^\/(images|sites|health|finances|codex)(\/|$)/.test(new URL(href).pathname);
+}

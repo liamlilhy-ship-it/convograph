@@ -26,7 +26,12 @@ export function computeAnchor(
   const togW = toggleEl.offsetWidth || 90;
   const togH = toggleEl.offsetHeight || 28;
   const { insetRight = 8, liftAbove = togH + 6 } = opts;
-  const visible = rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
+  const visible =
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.top < window.innerHeight &&
+    rect.bottom > 0 &&
+    !(platform.dom.isObscuredByOverlay?.() ?? false);
   return {
     x: Math.max(8, Math.min(window.innerWidth - togW - 8, rect.right - togW - insetRight)),
     y: Math.max(8, rect.top - liftAbove),

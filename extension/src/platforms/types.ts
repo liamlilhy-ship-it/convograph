@@ -66,6 +66,12 @@ export type PlatformDom = {
    *  locate a turn with no text to match — e.g. an image-only message. Optional:
    *  platforms without it fall back to matching the question text. */
   findBubbleByNodeId?(id: string): HTMLElement | null;
+  /** Whether a native overlay the pill cannot be z-layered under is currently
+   *  open (ChatGPT's composer "+" menu renders at z 50 inside a z-0 stacking
+   *  context, so at body level no host z-index gets beneath it). While true the
+   *  pill hides so the overlay reads unobstructed. Optional: platforms whose
+   *  overlays all portal to body (Claude) omit it — hostZIndex covers them. */
+  isObscuredByOverlay?(): boolean;
 };
 
 export interface Platform {
