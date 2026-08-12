@@ -37,7 +37,7 @@ function looksLikeQueryClient(v: unknown): v is QueryClientish {
  */
 function findQueryClient(): QueryClientish | null {
   const start =
-    document.querySelector('[data-user-message-bubble]') ??
+    document.querySelector('[data-testid="user-message"], [data-user-message-bubble]') ??
     document.querySelector('main') ??
     document.body;
   if (!start) return null;
