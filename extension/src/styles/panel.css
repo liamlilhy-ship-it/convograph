@@ -17,24 +17,44 @@
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border: 0;
+  /* Liquid glass: translucent tint over a blurred + saturated backdrop, with a
+     specular top rim (inset highlight) and a soft drop shadow for separation —
+     no border; the rim + shadow alone define the edge. */
+  background: var(--cg-glass-bg);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  backdrop-filter: blur(32px) saturate(200%);
   color: var(--cg-fg);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: var(--cg-shadow);
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-glass-shadow);
   user-select: none;
-  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
   white-space: nowrap;
   pointer-events: auto;
   visibility: var(--cg-toggle-vis, visible);
+}
+/* No backdrop-filter support → the translucent tint alone is illegible over page
+   text, so fall back to the opaque elevated surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cg-toggle {
+    background: var(--cg-bg-elev);
+    box-shadow: var(--cg-shadow);
+  }
 }
 .cg-toggle[data-hidden="true"] {
   visibility: hidden;
   pointer-events: none;
 }
-.cg-toggle:hover { border-color: var(--cg-accent); }
+/* Hover = a light wash *inside* the glass (full-coverage inset shadow layered
+   under the specular rim), not a colored ring around it. */
+.cg-toggle:hover {
+  box-shadow:
+    inset 0 1px 0 var(--cg-glass-highlight),
+    inset 0 0 0 999px var(--cg-glass-hover),
+    var(--cg-glass-shadow);
+}
 .cg-toggle[data-on="true"] { background: var(--cg-accent); color: white; border-color: var(--cg-accent); }
 .cg-toggle .cg-dot {
   width: 7px; height: 7px; border-radius: 50%;
