@@ -18,22 +18,37 @@
   padding: 0 10px;
   border-radius: 999px;
   border: 0;
-  /* Liquid glass: translucent tint over a blurred + saturated backdrop, with a
-     specular top rim (inset highlight) and a soft drop shadow for separation —
-     no border; the rim + shadow alone define the edge. */
+  overflow: hidden;
+  /* Refractive liquid glass: translucent tint over a blurred + saturated
+     backdrop, edged by a double specular rim (bright top, softer bottom/side
+     glints) with a diagonal light sheen (::before) — no border; the rims +
+     shadow alone define the edge. */
   background: var(--cg-glass-bg);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(240%);
+  backdrop-filter: blur(40px) saturate(240%);
   color: var(--cg-fg);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-glass-shadow);
+  box-shadow:
+    inset 0 1px 1px var(--cg-glass-highlight),
+    inset 0 -1px 1px var(--cg-glass-rim),
+    inset 1px 0 1px var(--cg-glass-rim),
+    inset -1px 0 1px var(--cg-glass-rim),
+    var(--cg-glass-shadow);
   user-select: none;
   transition: background 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
   white-space: nowrap;
   pointer-events: auto;
   visibility: var(--cg-toggle-vis, visible);
+}
+.cg-toggle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, var(--cg-glass-sheen) 0%, transparent 55%);
+  pointer-events: none;
 }
 /* No backdrop-filter support → the translucent tint alone is illegible over page
    text, so fall back to the opaque elevated surface. */
@@ -42,8 +57,12 @@
     background: var(--cg-bg-elev);
     box-shadow: var(--cg-shadow);
   }
+  .cg-toggle::before {
+    display: none;
+  }
   .cg-panel {
     background: var(--cg-bg);
+    box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
   }
 }
 .cg-toggle[data-hidden="true"] {
@@ -51,10 +70,13 @@
   pointer-events: none;
 }
 /* Hover = a light wash *inside* the glass (full-coverage inset shadow layered
-   under the specular rim), not a colored ring around it. */
+   under the rims), not a colored ring around it. */
 .cg-toggle:hover {
   box-shadow:
-    inset 0 1px 0 var(--cg-glass-highlight),
+    inset 0 1px 1px var(--cg-glass-highlight),
+    inset 0 -1px 1px var(--cg-glass-rim),
+    inset 1px 0 1px var(--cg-glass-rim),
+    inset -1px 0 1px var(--cg-glass-rim),
     inset 0 0 0 999px var(--cg-glass-hover),
     var(--cg-glass-shadow);
 }
@@ -77,12 +99,12 @@
      stays readable over busy pages. Toolbar + canvas are transparent so this
      one surface is the panel's only backdrop. */
   background: var(--cg-glass-panel-bg);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(240%);
+  backdrop-filter: blur(48px) saturate(240%);
   border-left: 1px solid var(--cg-border-strong);
   display: flex;
   flex-direction: column;
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), -12px 0 32px rgba(0, 0, 0, 0.18);
   animation: cg-slide-in 200ms ease-out;
   pointer-events: auto;
 }
