@@ -26,6 +26,8 @@
   --cg-glass-highlight: rgba(255, 255, 255, 0.95);
   --cg-glass-hover: rgba(255, 255, 255, 0.45);
   --cg-glass-shadow: 0 4px 16px rgba(13, 13, 13, 0.08);
+  /* Panel surface: same glass, heavier tint so node/preview text stays readable. */
+  --cg-glass-panel-bg: rgba(255, 255, 255, 0.60);
   --cg-shadow-hover: 0 10px 28px rgba(13, 13, 13, 0.12);
   --cg-shadow-float: 0 16px 48px rgba(13, 13, 13, 0.20);
   --cg-on-accent: #ffffff;
@@ -54,6 +56,7 @@
   --cg-glass-highlight: rgba(255, 255, 255, 0.30);
   --cg-glass-hover: rgba(255, 255, 255, 0.16);
   --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+  --cg-glass-panel-bg: rgba(33, 33, 33, 0.55);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #565869;
 }

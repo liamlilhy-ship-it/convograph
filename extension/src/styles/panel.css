@@ -42,6 +42,9 @@
     background: var(--cg-bg-elev);
     box-shadow: var(--cg-shadow);
   }
+  .cg-panel {
+    background: var(--cg-bg);
+  }
 }
 .cg-toggle[data-hidden="true"] {
   visibility: hidden;
@@ -70,7 +73,12 @@
   bottom: 0;
   width: var(--cg-panel-w, 480px);
   z-index: 2147483645;
-  background: var(--cg-bg);
+  /* Same liquid-glass treatment as the pill, at a heavier tint so node text
+     stays readable over busy pages. Toolbar + canvas are transparent so this
+     one surface is the panel's only backdrop. */
+  background: var(--cg-glass-panel-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   border-left: 1px solid var(--cg-border-strong);
   display: flex;
   flex-direction: column;
@@ -114,7 +122,7 @@
   gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--cg-border);
-  background: var(--cg-bg);
+  background: transparent;
   flex-wrap: wrap;
 }
 .cg-toolbar h1 {
@@ -215,10 +223,10 @@
 .cg-canvas {
   flex: 1;
   position: relative;
+  /* Dot grid only — the panel's glass surface shows through beneath it. */
   background:
     radial-gradient(circle at 1px 1px, var(--cg-border) 1px, transparent 0)
-      0 0 / 24px 24px,
-    var(--cg-bg);
+      0 0 / 24px 24px;
 }
 
 /* ===== Full-screen mode ===== */
