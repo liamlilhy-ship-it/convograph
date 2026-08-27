@@ -22,10 +22,10 @@
   /* Liquid-glass surface for the entry pill: translucent neutral-white tint +
      specular top highlight + hover wash; combined with backdrop-filter in
      panel.css. */
-  --cg-glass-bg: rgba(255, 255, 255, 0.20);
-  --cg-glass-highlight: rgba(255, 255, 255, 0.85);
-  --cg-glass-hover: rgba(255, 255, 255, 0.35);
-  --cg-glass-shadow: 0 8px 24px rgba(13, 13, 13, 0.14);
+  --cg-glass-bg: rgba(255, 255, 255, 0.14);
+  --cg-glass-highlight: rgba(255, 255, 255, 0.95);
+  --cg-glass-hover: rgba(255, 255, 255, 0.45);
+  --cg-glass-shadow: 0 4px 16px rgba(13, 13, 13, 0.08);
   --cg-shadow-hover: 0 10px 28px rgba(13, 13, 13, 0.12);
   --cg-shadow-float: 0 16px 48px rgba(13, 13, 13, 0.20);
   --cg-on-accent: #ffffff;
@@ -50,10 +50,10 @@
   --cg-node-q-bg: #2f2f2f;
   --cg-node-a-bg: #2a2a2a;
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-  --cg-glass-bg: rgba(47, 47, 47, 0.22);
-  --cg-glass-highlight: rgba(255, 255, 255, 0.18);
-  --cg-glass-hover: rgba(255, 255, 255, 0.12);
-  --cg-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.50);
+  --cg-glass-bg: rgba(47, 47, 47, 0.16);
+  --cg-glass-highlight: rgba(255, 255, 255, 0.30);
+  --cg-glass-hover: rgba(255, 255, 255, 0.16);
+  --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #565869;
 }
