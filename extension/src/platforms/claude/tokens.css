@@ -19,14 +19,12 @@
   /* Liquid-glass surface for the entry pill: translucent warm-white tint (Claude's
      beige family) + specular top highlight + hover wash; combined with
      backdrop-filter in panel.css. */
-  --cg-glass-bg: rgba(255, 253, 250, 0.10);
+  --cg-glass-bg: rgba(255, 253, 250, 0.14);
   --cg-glass-highlight: rgba(255, 255, 255, 0.95);
-  --cg-glass-rim: rgba(255, 255, 255, 0.45);
-  --cg-glass-sheen: rgba(255, 255, 255, 0.45);
   --cg-glass-hover: rgba(255, 255, 255, 0.45);
-  --cg-glass-shadow: 0 4px 16px rgba(31, 30, 29, 0.10);
+  --cg-glass-shadow: 0 4px 16px rgba(31, 30, 29, 0.08);
   /* Panel surface: same glass, heavier tint so node/preview text stays readable. */
-  --cg-glass-panel-bg: rgba(250, 249, 245, 0.48);
+  --cg-glass-panel-bg: rgba(250, 249, 245, 0.60);
   /* Shadows tied to the brand ink color + text-on-accent. Defined once here so
      they cascade to the dark theme too (they were theme-independent literals). */
   --cg-shadow-hover: 0 10px 28px rgba(31, 30, 29, 0.14);
@@ -53,13 +51,11 @@
   --cg-node-q-bg: #2e2825;
   --cg-node-a-bg: #262524;
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-  --cg-glass-bg: rgba(38, 37, 36, 0.14);
-  --cg-glass-highlight: rgba(255, 255, 255, 0.40);
-  --cg-glass-rim: rgba(255, 255, 255, 0.15);
-  --cg-glass-sheen: rgba(255, 255, 255, 0.30);
+  --cg-glass-bg: rgba(38, 37, 36, 0.16);
+  --cg-glass-highlight: rgba(255, 255, 255, 0.30);
   --cg-glass-hover: rgba(255, 255, 255, 0.16);
-  --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --cg-glass-panel-bg: rgba(31, 30, 29, 0.48);
+  --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+  --cg-glass-panel-bg: rgba(31, 30, 29, 0.55);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #6b6862;
 }
