@@ -15,10 +15,11 @@
      (accent-colored) active path. */
   --cg-find: #2f6fe0;
   --cg-find-soft: rgba(47, 111, 224, 0.18);
-  /* Per-role node surfaces — Q = faint grey wash, A = clean white. Translucent
-     so the panel's glass glows through the cards (the panel is already blurred,
-     so no per-node backdrop-filter is needed). */
-  --cg-node-q-bg: rgba(247, 247, 248, 0.72);
+  /* Per-role node surfaces — Q = soft green wash (accent family, so questions
+     read at a glance), A = clean white. Translucent so the panel's glass glows
+     through the cards (the panel is already blurred, so no per-node
+     backdrop-filter is needed). */
+  --cg-node-q-bg: rgba(228, 246, 238, 0.80);
   --cg-node-a-bg: rgba(255, 255, 255, 0.72);
   --cg-shadow: 0 6px 24px rgba(13, 13, 13, 0.08);
   /* Liquid-glass surface for the entry pill: translucent neutral-white tint +
@@ -55,7 +56,7 @@
   --cg-accent-soft: rgba(25, 195, 125, 0.22);
   --cg-find: #6aa3ff;
   --cg-find-soft: rgba(106, 163, 255, 0.28);
-  --cg-node-q-bg: rgba(47, 47, 47, 0.72);
+  --cg-node-q-bg: rgba(28, 58, 46, 0.78);
   --cg-node-a-bg: rgba(42, 42, 42, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-glass-bg: rgba(47, 47, 47, 0.16);
