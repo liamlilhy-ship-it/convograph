@@ -251,6 +251,20 @@ export function SearchIcon(p: IconProps) {
   );
 }
 
+/** Mini-tree glyph — fits the whole graph in view (lower-left canvas control). */
+export function FitViewIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <circle cx="7" cy="3" r="1.6" />
+      <circle cx="3.5" cy="11" r="1.6" />
+      <circle cx="10.5" cy="11" r="1.6" />
+      <path d="M7 4.6v1.6" />
+      <path d="M7 6.2L3.5 9.4" />
+      <path d="M7 6.2l3.5 3.2" />
+    </svg>
+  );
+}
+
 /** Crosshair/target glyph — recenters the canvas on the most recent message. */
 export function CenterIcon(p: IconProps) {
   return (
