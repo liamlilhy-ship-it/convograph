@@ -297,6 +297,76 @@ function ExpandFit({
   return null;
 }
 
+type LaidRect = { id: string; x: number; y: number; width: number; height: number };
+
+/**
+ * Keeps the viewport meaningful when the world it looks at changes under it.
+ * Two rules, one component:
+ *
+ *  A. LAYOUT INVALIDATED (direction switch): dagre re-lays the graph in a
+ *     completely different coordinate system, so the stale viewport would stare
+ *     at empty space. Coordinates aren't comparable across layouts but node
+ *     identity is — find the node nearest the viewport center in the OLD
+ *     layout, then re-center on that same node in the NEW layout at the
+ *     current zoom. Any future geometry-invalidating change can reuse this
+ *     re-anchor-by-node-id path.
+ *
+ *  B. CONTAINER RESIZE (fullscreen enter/exit, panel border drag, window
+ *     resize): the transform is anchored top-left, so a width change shifts
+ *     what's centered. Shift the viewport by half the size delta so the world
+ *     point at the center stays at the center. Covers every resize source with
+ *     one rule; zoom is untouched.
+ */
+function ViewAnchor({ laid, direction }: { laid: LaidRect[]; direction: LayoutDirection }) {
+  const { getViewport, setViewport, setCenter } = useReactFlow();
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+
+  // Rule B — keep the world point at the viewport center fixed across resizes.
+  // Skips the initial 0→measured transition (framing the first view is onInit's
+  // job in GraphCanvas).
+  const prevSize = useRef({ w: width, h: height });
+  useEffect(() => {
+    const { w, h } = prevSize.current;
+    prevSize.current = { w: width, h: height };
+    if (!width || !height || !w || !h) return;
+    if (w === width && h === height) return;
+    const vp = getViewport();
+    void setViewport({ x: vp.x + (width - w) / 2, y: vp.y + (height - h) / 2, zoom: vp.zoom });
+  }, [width, height, getViewport, setViewport]);
+
+  // Rule A — on a direction switch, re-center on the node that was nearest the
+  // viewport center. `prevLaid` still holds the pre-switch layout when the
+  // effect runs (it's only updated here), which is what the screen showed.
+  const prevDir = useRef(direction);
+  const prevLaid = useRef(laid);
+  useEffect(() => {
+    const dirChanged = prevDir.current !== direction;
+    const oldLaid = prevLaid.current;
+    prevDir.current = direction;
+    prevLaid.current = laid;
+    if (!dirChanged || !width || !height) return;
+    const vp = getViewport();
+    const cx = (width / 2 - vp.x) / vp.zoom;
+    const cy = (height / 2 - vp.y) / vp.zoom;
+    let best: LaidRect | null = null;
+    let bestD = Infinity;
+    for (const n of oldLaid) {
+      const d = (n.x + n.width / 2 - cx) ** 2 + (n.y + n.height / 2 - cy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = n;
+      }
+    }
+    const nn = best && laid.find((l) => l.id === best!.id);
+    if (nn) {
+      void setCenter(nn.x + nn.width / 2, nn.y + nn.height / 2, { zoom: vp.zoom, duration: 300 });
+    }
+  }, [direction, laid, width, height, getViewport, setCenter]);
+
+  return null;
+}
+
 export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
@@ -694,6 +764,7 @@ export function GraphCanvas({
           </Controls>
           <SearchFocus nonce={searchFocusNonce} bounds={currentMatchBounds} />
           <ExpandFit previewIds={previewIds} laid={laid} />
+          <ViewAnchor laid={laid} direction={direction} />
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
