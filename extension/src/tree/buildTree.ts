@@ -1,4 +1,5 @@
 import type { ApiConversation, ApiMessage, NormalizedCitation } from '../platforms/model';
+import { isComposeBlock, composeMarkdownOf } from './compose';
 import { computeNodePreview, type NodePreview } from './preview';
 import type {
   ImageRef,
@@ -39,7 +40,7 @@ export type BuiltTree = {
 
 function textOf(msg: ApiMessage): string {
   const parts = (msg.content ?? [])
-    .map((c) => (c.type === 'text' ? c.text ?? '' : ''))
+    .map((c) => (c.type === 'text' ? c.text ?? '' : isComposeBlock(c) ? composeMarkdownOf(c) : ''))
     .filter(Boolean);
   return parts.join('\n').trim();
 }
@@ -113,6 +114,15 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
       flush();
       const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
       blocks.push({ kind: 'widget', widget: { title, code, isSvg: code.trim().startsWith('<svg') } });
+    } else if (isComposeBlock(c)) {
+      // Composed drafts (emails) render as ordinary markdown, woven in at the
+      // block's document position — so the draft sits before any trailing
+      // commentary, matching the native chat.
+      const md = composeMarkdownOf(c);
+      if (!md) continue;
+      const base = run.length === 0 ? 0 : rawLen + SEP.length;
+      run.push(md);
+      rawLen = base + md.length;
     }
   }
   flush();

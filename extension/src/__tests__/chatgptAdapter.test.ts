@@ -180,3 +180,57 @@ describe('adapter collapses multi-message assistant turns', () => {
     expect(display.orderedNodes.every((n) => n.siblingCount === 1)).toBe(true);
   });
 });
+
+/** A turn whose answer embeds ChatGPT's compose surface as a `:::writing` fence. */
+const writingFence: ChatGptConversation = {
+  conversation_id: 'conv-3',
+  current_node: 'a1',
+  mapping: {
+    root: { id: 'root', parent: null, children: ['u1'], message: null },
+    u1: { id: 'u1', parent: 'root', children: ['a1'], message: { author: { role: 'user' }, create_time: 1, recipient: 'all', content: { content_type: 'text', parts: ['Write me a follow-up email'] } } },
+    a1: {
+      id: 'a1',
+      parent: 'u1',
+      children: [],
+      message: {
+        author: { role: 'assistant' },
+        create_time: 2,
+        recipient: 'all',
+        content: {
+          content_type: 'text',
+          parts: [
+            'Here’s a warm, concise version:\n\n:::writing{variant="email" id="48217" subject="Following up on PM application"}\nHi [Name],\n\nHope you’re doing well!\n\nBest,\n[Your Name]\n:::\n\nIf you want, I can make it more casual.',
+          ],
+        },
+      },
+    },
+  },
+};
+
+describe('adapter rewrites `:::writing` compose fences into message_compose_v1 blocks', () => {
+  const conv = adaptChatGptConversation(writingFence, 'conv-3');
+  const a1 = conv.chat_messages.find((m) => m.uuid === 'a1')!;
+
+  it('splits the text around the fence and emits a synthetic compose block', () => {
+    expect(a1.content.map((c) => c.type)).toEqual(['text', 'tool_use', 'text']);
+    const compose = a1.content[1]!;
+    expect(compose.name).toBe('message_compose_v1');
+    expect(compose.input?.kind).toBe('email');
+    const variants = compose.input?.variants as Array<{ subject?: string; body: string }>;
+    expect(variants[0]!.subject).toBe('Following up on PM application');
+    expect(variants[0]!.body).toContain('Hi [Name],');
+    expect(variants[0]!.body).not.toContain(':::');
+  });
+
+  it('renders through buildTree as readable markdown with an email kind', () => {
+    const node = buildTree(conv).byId.get('a1')!;
+    expect(node.fullText).not.toContain(':::writing');
+    expect(node.fullText).toContain('**Email**');
+    expect(node.fullText).toContain('Subject: Following up on PM application');
+    expect(node.fullText.indexOf('Hi [Name],')).toBeLessThan(node.fullText.indexOf('more casual'));
+    expect(node.preview.kinds.some((k) => k.kind === 'email')).toBe(true);
+    // The email body is searchable.
+    const display = buildDisplayTree(buildTree(conv));
+    expect(searchNodes(display.orderedNodes, 'hope you').length).toBe(1);
+  });
+});
