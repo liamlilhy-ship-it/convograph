@@ -15,7 +15,7 @@
      A = clean white) that separate question from answer without heaviness.
      Translucent so the panel's glass glows through the cards (the panel is
      already blurred, so no per-node backdrop-filter is needed). */
-  --cg-node-q-bg: rgba(251, 242, 236, 0.72);
+  --cg-node-q-bg: rgba(248, 230, 219, 0.80);
   --cg-node-a-bg: rgba(255, 255, 255, 0.72);
   --cg-shadow: 0 6px 24px rgba(31, 30, 29, 0.10);
   /* Liquid-glass surface for the entry pill: translucent warm-white tint (Claude's
@@ -54,7 +54,7 @@
   --cg-accent-soft: rgba(217, 119, 87, 0.20);
   --cg-find: #45c8a3;
   --cg-find-soft: rgba(69, 200, 163, 0.30);
-  --cg-node-q-bg: rgba(46, 40, 37, 0.72);
+  --cg-node-q-bg: rgba(72, 45, 35, 0.78);
   --cg-node-a-bg: rgba(38, 37, 36, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-glass-bg: rgba(38, 37, 36, 0.16);
