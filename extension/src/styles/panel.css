@@ -45,6 +45,9 @@
   .cg-panel {
     background: var(--cg-bg);
   }
+  .cg-pv-window {
+    background: var(--cg-bg-elev);
+  }
 }
 .cg-toggle[data-hidden="true"] {
   visibility: hidden;
@@ -138,11 +141,14 @@
   font-size: 12px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border-radius: 8px;
+  /* Glass chip: no border — a translucent wash on the panel's glass. States
+     tint the wash (accent on hover/pressed) instead of recoloring a border. */
+  border: 0;
+  background: var(--cg-glass-chip);
   color: var(--cg-fg);
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 /* The button row sits above the status row below it, so a button's tooltip
    (which drops downward) paints over the status text instead of behind it. */
@@ -150,7 +156,7 @@
   position: relative;
   z-index: 2;
 }
-.cg-toolbar button:hover { border-color: var(--cg-accent); }
+.cg-toolbar button:hover { background: var(--cg-accent-soft); color: var(--cg-accent); }
 /* Icon-only toolbar button (e.g. full-screen toggle): center the SVG glyph. */
 .cg-toolbar button.cg-iconbtn {
   display: inline-flex;
@@ -159,7 +165,7 @@
   padding: 0 8px;
 }
 .cg-toolbar button[aria-pressed="true"] {
-  border-color: var(--cg-accent);
+  background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
 .cg-toolbar .cg-status {
@@ -197,15 +203,14 @@
   font-size: 12px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border-radius: 8px;
+  border: 0;
+  background: var(--cg-glass-chip);
   color: var(--cg-fg);
 }
 .cg-search-input::placeholder { color: var(--cg-fg-muted); }
 .cg-search-input:focus {
   outline: none;
-  border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft);
 }
 .cg-search-count {
@@ -218,7 +223,7 @@
   opacity: 0.4;
   cursor: default;
 }
-.cg-search button[disabled]:hover { border-color: var(--cg-border-strong); }
+.cg-search button[disabled]:hover { background: var(--cg-glass-chip); color: var(--cg-fg); }
 
 .cg-canvas {
   flex: 1;
@@ -256,7 +261,7 @@
   flex-direction: column;
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border);
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: var(--cg-shadow);
   font-size: 14px;
   line-height: 1.45;
@@ -803,9 +808,13 @@ mark.cg-search-hit[data-current="true"] {
 }
 .react-flow__controls button {
   position: relative; /* anchor for the custom hover tooltip (::after) */
-  background: var(--cg-bg-elev) !important;
-  border-color: var(--cg-border) !important;
+  background: var(--cg-glass-chip) !important;
+  border-color: transparent !important;
   color: var(--cg-fg) !important;
+}
+.react-flow__controls button:hover {
+  background: var(--cg-accent-soft) !important;
+  color: var(--cg-accent) !important;
 }
 /* Let a control's tooltip extend past the control stack (it opens to the right). */
 .react-flow__controls { overflow: visible; }
@@ -815,9 +824,10 @@ mark.cg-search-hit[data-current="true"] {
   /* Width/height come from the React Flow `style` prop (so its internal scale
      matches the rendered box); orientation flips with the layout direction. */
   margin: 10px;
-  border: 1px solid var(--cg-border);
-  border-radius: 8px;
-  box-shadow: var(--cg-shadow);
+  border: 0;
+  border-radius: 10px;
+  background: var(--cg-glass-chip);
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-shadow);
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
@@ -1114,10 +1124,14 @@ mark.cg-search-hit[data-current="true"] {
   flex-direction: column;
   min-width: 320px;
   min-height: 200px;
-  background: var(--cg-bg-elev);
-  border: 1px solid var(--cg-border-strong);
-  border-radius: 12px;
-  box-shadow: var(--cg-shadow-float);
+  /* Floating glass sheet: heavier tint than the panel (long-form reading) over
+     its own backdrop blur, edged by the specular rim instead of a border. */
+  background: var(--cg-glass-float-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-shadow-float);
   overflow: hidden;
   pointer-events: auto;
 }
@@ -1128,7 +1142,7 @@ mark.cg-search-hit[data-current="true"] {
   gap: 7px;
   height: 34px;
   padding: 0 8px 0 12px;
-  background: var(--cg-bg);
+  background: transparent;
   border-bottom: 1px solid var(--cg-border);
   cursor: grab;
   user-select: none;

@@ -15,9 +15,11 @@
      (accent-colored) active path. */
   --cg-find: #2f6fe0;
   --cg-find-soft: rgba(47, 111, 224, 0.18);
-  /* Per-role node surfaces — Q = faint grey wash, A = clean white. */
-  --cg-node-q-bg: #f7f7f8;
-  --cg-node-a-bg: #ffffff;
+  /* Per-role node surfaces — Q = faint grey wash, A = clean white. Translucent
+     so the panel's glass glows through the cards (the panel is already blurred,
+     so no per-node backdrop-filter is needed). */
+  --cg-node-q-bg: rgba(247, 247, 248, 0.72);
+  --cg-node-a-bg: rgba(255, 255, 255, 0.72);
   --cg-shadow: 0 6px 24px rgba(13, 13, 13, 0.08);
   /* Liquid-glass surface for the entry pill: translucent neutral-white tint +
      specular top highlight + hover wash; combined with backdrop-filter in
@@ -28,6 +30,10 @@
   --cg-glass-shadow: 0 4px 16px rgba(13, 13, 13, 0.08);
   /* Panel surface: same glass, heavier tint so node/preview text stays readable. */
   --cg-glass-panel-bg: rgba(255, 255, 255, 0.60);
+  /* Chip = borderless wash for toolbar/search/controls on the panel glass;
+     float = heavier sheet for the draggable full-content preview window. */
+  --cg-glass-chip: rgba(255, 255, 255, 0.50);
+  --cg-glass-float-bg: rgba(255, 255, 255, 0.78);
   --cg-shadow-hover: 0 10px 28px rgba(13, 13, 13, 0.12);
   --cg-shadow-float: 0 16px 48px rgba(13, 13, 13, 0.20);
   --cg-on-accent: #ffffff;
@@ -49,14 +55,16 @@
   --cg-accent-soft: rgba(25, 195, 125, 0.22);
   --cg-find: #6aa3ff;
   --cg-find-soft: rgba(106, 163, 255, 0.28);
-  --cg-node-q-bg: #2f2f2f;
-  --cg-node-a-bg: #2a2a2a;
+  --cg-node-q-bg: rgba(47, 47, 47, 0.72);
+  --cg-node-a-bg: rgba(42, 42, 42, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-glass-bg: rgba(47, 47, 47, 0.16);
   --cg-glass-highlight: rgba(255, 255, 255, 0.30);
   --cg-glass-hover: rgba(255, 255, 255, 0.16);
   --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
   --cg-glass-panel-bg: rgba(33, 33, 33, 0.55);
+  --cg-glass-chip: rgba(255, 255, 255, 0.08);
+  --cg-glass-float-bg: rgba(33, 33, 33, 0.75);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #565869;
 }

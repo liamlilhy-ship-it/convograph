@@ -614,7 +614,7 @@ export function GraphCanvas({
             nodeStrokeWidth={3}
             nodeBorderRadius={3}
             maskColor="var(--cg-minimap-mask)"
-            bgColor="var(--cg-bg-elev)"
+            bgColor="transparent"
           />
         </ReactFlow>
       </ReactFlowProvider>
