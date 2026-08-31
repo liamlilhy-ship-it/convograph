@@ -1,4 +1,5 @@
 import type { ApiContentBlock } from '../platforms/model';
+import { isComposeBlock, composeVariantsOf, composeKindLabel, type ComposeVariant } from './compose';
 
 export type LinkItem = { text: string; url: string };
 
@@ -47,7 +48,11 @@ export type ContentKind =
   | { kind: 'attachment'; count: number; files: FileRef[] }
   | { kind: 'links'; count: number; items: LinkItem[] }
   | { kind: 'widget'; count: number; widgets: WidgetRef[] }
-  | { kind: 'artifact'; count: number; items: ArtifactRef[] };
+  | { kind: 'artifact'; count: number; items: ArtifactRef[] }
+  /** A composed draft (email etc.) from a platform's compose surface. `label` is
+   *  the display name of the compose kind ("Email"); `subject` the first draft's
+   *  subject line. */
+  | { kind: 'email'; count: number; label: string; subject?: string };
 
 /**
  * A web source Claude cited in an answer (claude.ai's `text`-block citations).
@@ -75,9 +80,16 @@ export type BlockCitation = { end: number; ref: CitationRef };
  * being grouped after all the text. An md block may carry `citations` — inline
  * reference chips inserted at their `end` offsets when rendered.
  */
+/** A composed draft (email etc.) rendered as a distinct card in the full
+ *  preview: `label` names the compose kind ("Email"); each variant is one
+ *  A/B draft. Future compose kinds only need a new label — the card layout
+ *  (header / subject / markdown body) is kind-agnostic. */
+export type ComposeRef = { label: string; variants: ComposeVariant[] };
+
 export type PreviewBlock =
   | { kind: 'md'; text: string; citations?: BlockCitation[] }
-  | { kind: 'widget'; widget: WidgetRef };
+  | { kind: 'widget'; widget: WidgetRef }
+  | { kind: 'compose'; compose: ComposeRef };
 
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
 const LIST_LINE_RE = /^\s*(?:[-*+]\s+|\d+\.\s+)/;
@@ -168,6 +180,21 @@ export function detectKinds(
   const artifacts = media?.artifacts ?? [];
   if (artifacts.length) {
     kinds.push({ kind: 'artifact', count: artifacts.length, items: artifacts });
+  }
+
+  // Composed drafts (emails) — claude.ai's `message_compose_v1` tool, or the
+  // synthetic block ChatGPT's adapter builds from a `:::writing` fence.
+  const composes = blocks.filter(isComposeBlock);
+  const variants = composes.flatMap(composeVariantsOf);
+  if (variants.length) {
+    kinds.push({
+      kind: 'email',
+      count: variants.length,
+      label: composeKindLabel(
+        typeof composes[0]!.input?.kind === 'string' ? (composes[0]!.input.kind as string) : undefined,
+      ),
+      subject: variants.find((v) => v.subject)?.subject,
+    });
   }
 
   // Link-heavy text (don't double-count those inside code fences)

@@ -138,6 +138,80 @@ describe('buildTree', () => {
     }
   });
 
+  it('renders a `message_compose_v1` email draft (claude.ai compose card) as inline markdown', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-08-30T10:00:00Z',
+          content: [
+            {
+              type: 'tool_use',
+              name: 'message_compose_v1',
+              input: {
+                kind: 'email',
+                summary_title: 'Job application follow-up',
+                variants: [
+                  { label: 'Brief check-in', subject: 'Following up — PM application', body: 'Hi [Name],\n\nJust checking in.\n\nBest,\nLiam' },
+                  { label: 'Add new signal', subject: 'Checking in on my application', body: 'Hi [Name],\n\nSince applying I shipped X.\n\nBest,\nLiam' },
+                ],
+              },
+            },
+            { type: 'text', text: 'I drafted two versions — fill in the bracketed details.' },
+          ],
+        },
+      ],
+    };
+    const node = buildTree(conv).byId.get('a1')!;
+    // Both drafts land in the text, before the trailing commentary.
+    expect(node.fullText).toContain('**Email — Brief check-in**');
+    expect(node.fullText).toContain('Subject: Following up — PM application');
+    expect(node.fullText).toContain('Just checking in.');
+    expect(node.fullText).toContain('**Email — Add new signal**');
+    expect(node.fullText.indexOf('Just checking in.')).toBeLessThan(node.fullText.indexOf('I drafted two versions'));
+    // Body blocks carry a dedicated compose card for the expanded reader, in
+    // document order (draft card before the trailing commentary run).
+    expect(node.body.map((b) => b.kind)).toEqual(['compose', 'md']);
+    const card = node.body[0]!;
+    if (card.kind === 'compose') {
+      expect(card.compose.label).toBe('Email');
+      expect(card.compose.variants.map((v) => v.label)).toEqual(['Brief check-in', 'Add new signal']);
+      expect(card.compose.variants[0]!.subject).toBe('Following up — PM application');
+      expect(card.compose.variants[0]!.body).toContain('Just checking in.');
+    }
+    // The email kind chip is detected with the first subject.
+    const email = node.preview.kinds.find((k) => k.kind === 'email');
+    expect(email && email.kind === 'email' ? email.count : 0).toBe(2);
+    expect(email && email.kind === 'email' ? email.subject : '').toBe('Following up — PM application');
+    expect(email && email.kind === 'email' ? email.label : '').toBe('Email');
+  });
+
+  it('ignores a malformed `message_compose_v1` block (no variants)', () => {
+    const conv: ApiConversation = {
+      uuid: 'c',
+      current_leaf_message_uuid: 'a1',
+      chat_messages: [
+        {
+          uuid: 'a1',
+          parent_message_uuid: null,
+          sender: 'assistant',
+          created_at: '2026-08-30T10:00:00Z',
+          content: [
+            { type: 'text', text: 'hello' },
+            { type: 'tool_use', name: 'message_compose_v1', input: { kind: 'email' } },
+          ],
+        },
+      ],
+    };
+    const node = buildTree(conv).byId.get('a1')!;
+    expect(node.fullText).toBe('hello');
+    expect(node.preview.kinds.some((k) => k.kind === 'email')).toBe(false);
+  });
+
   it('ignores an `artifacts` tool call with no inline content', () => {
     const conv: ApiConversation = {
       uuid: 'c',

@@ -1,4 +1,5 @@
 import type { ApiConversation, ApiMessage, NormalizedCitation } from '../platforms/model';
+import { isComposeBlock, composeMarkdownOf, composeVariantsOf, composeKindLabel } from './compose';
 import { computeNodePreview, type NodePreview } from './preview';
 import type {
   ImageRef,
@@ -39,7 +40,7 @@ export type BuiltTree = {
 
 function textOf(msg: ApiMessage): string {
   const parts = (msg.content ?? [])
-    .map((c) => (c.type === 'text' ? c.text ?? '' : ''))
+    .map((c) => (c.type === 'text' ? c.text ?? '' : isComposeBlock(c) ? composeMarkdownOf(c) : ''))
     .filter(Boolean);
   return parts.join('\n').trim();
 }
@@ -113,6 +114,16 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
       flush();
       const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
       blocks.push({ kind: 'widget', widget: { title, code, isSvg: code.trim().startsWith('<svg') } });
+    } else if (isComposeBlock(c)) {
+      // Composed drafts (emails) get their own block at the document position —
+      // the full preview renders them as a distinct card (header / subject /
+      // body) so they stand apart from surrounding commentary. The markdown
+      // weave in `textOf` still feeds search and the collapsed excerpt.
+      const variants = composeVariantsOf(c);
+      if (!variants.length) continue;
+      flush();
+      const label = composeKindLabel(typeof c.input?.kind === 'string' ? c.input.kind : undefined);
+      blocks.push({ kind: 'compose', compose: { label, variants } });
     }
   }
   flush();

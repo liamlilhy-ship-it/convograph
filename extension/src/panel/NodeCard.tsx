@@ -7,6 +7,7 @@ import { isHtmlArtifact } from '../tree/contentKinds';
 import type { NodePreview } from '../tree/preview';
 import {
   CodeIcon,
+  MailIcon,
   ImageIcon,
   AttachmentIcon,
   LinkIcon,
@@ -794,7 +795,7 @@ function ThumbTile({
 
 /** Max number of "heavy" rich previews (code/table/list/links) rendered. */
 const MAX_RICH = 2;
-const RICH_ORDER: ContentKind['kind'][] = ['code', 'table', 'list', 'links'];
+const RICH_ORDER: ContentKind['kind'][] = ['email', 'code', 'table', 'list', 'links'];
 
 function RichKinds({ preview }: { preview: NodePreview }) {
   if (!preview.kinds.length) return null;
@@ -834,11 +835,24 @@ function chipKey(k: ContentKind): string {
       return `widget:${k.count}`;
     case 'artifact':
       return `artifact:${k.count}`;
+    case 'email':
+      return `email:${k.count}`;
   }
 }
 
 function KindBlock({ kind }: { kind: ContentKind }) {
   switch (kind.kind) {
+    case 'email':
+      return (
+        <div className="cg-code" title={`${kind.label} draft`}>
+          <div className="cg-code-head">
+            <MailIcon size={12} />
+            <span>{kind.label}</span>
+            {kind.count > 1 && <span className="cg-muted">· {kind.count} drafts</span>}
+          </div>
+          {kind.subject && <div className="cg-muted">{kind.subject}</div>}
+        </div>
+      );
     case 'code':
       return (
         <div className="cg-code" title="Code">

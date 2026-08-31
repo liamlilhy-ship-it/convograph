@@ -93,6 +93,16 @@ export function FileIcon(p: IconProps) {
   );
 }
 
+/** Envelope glyph — marks a composed email draft in a node. */
+export function MailIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <rect x="1.5" y="3" width="11" height="8" rx="1.5" />
+      <polyline points="2 4 7 8 12 4" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon(p: IconProps) {
   return (
     <svg {...svgProps(p)}>
@@ -247,6 +257,20 @@ export function SearchIcon(p: IconProps) {
     <svg {...svgProps(p)}>
       <circle cx="6" cy="6" r="3.6" />
       <line x1="8.7" y1="8.7" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+/** Mini-tree glyph — fits the whole graph in view (lower-left canvas control). */
+export function FitViewIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <circle cx="7" cy="3" r="1.6" />
+      <circle cx="3.5" cy="11" r="1.6" />
+      <circle cx="10.5" cy="11" r="1.6" />
+      <path d="M7 4.6v1.6" />
+      <path d="M7 6.2L3.5 9.4" />
+      <path d="M7 6.2l3.5 3.2" />
     </svg>
   );
 }

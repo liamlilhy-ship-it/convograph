@@ -1,4 +1,5 @@
-import type { NormalizedConversation, NormalizedFile, NormalizedMessage } from '../model';
+import type { NormalizedContentBlock, NormalizedConversation, NormalizedFile, NormalizedMessage } from '../model';
+import { COMPOSE_TOOL } from '../../tree/compose';
 import type { ChatGptConversation, ChatGptImagePart, ChatGptMessage, ChatGptRefImage } from './types';
 
 /**
@@ -52,6 +53,51 @@ function extractText(m?: ChatGptMessage | null): string {
   }
   if (typeof c.text === 'string') return stripRefTokens(c.text).trim();
   return '';
+}
+
+/**
+ * ChatGPT's compose surface (the email card with Recipients/Send) is embedded
+ * inline in the message text as a directive fence:
+ *
+ *   :::writing{variant="email" id="48217" subject="Following up"}
+ *   Hi [Name], …
+ *   :::
+ *
+ * Rendered raw, the fence lines read as garbage in the graph. Split the text
+ * around each fence and emit the draft as a synthetic `message_compose_v1`
+ * tool_use block — the same shape claude.ai's compose tool produces — so the
+ * shared tree layer renders/searches it as a normal draft on both platforms.
+ */
+const WRITING_FENCE_RE = /^:::writing\{([^}\n]*)\}[ \t]*\n([\s\S]*?)\n:::[ \t]*$/gm;
+
+function fenceAttrs(raw: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const m of raw.matchAll(/([a-zA-Z_][\w-]*)="([^"]*)"/g)) out[m[1]!] = m[2]!;
+  return out;
+}
+
+function contentBlocksOf(text: string): NormalizedContentBlock[] {
+  const blocks: NormalizedContentBlock[] = [];
+  let last = 0;
+  WRITING_FENCE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = WRITING_FENCE_RE.exec(text)) !== null) {
+    const before = text.slice(last, m.index).trim();
+    if (before) blocks.push({ type: 'text', text: before });
+    const attrs = fenceAttrs(m[1]!);
+    blocks.push({
+      type: 'tool_use',
+      name: COMPOSE_TOOL,
+      input: {
+        kind: attrs.variant || 'message',
+        variants: [{ subject: attrs.subject, body: m[2]!.trim() }],
+      },
+    });
+    last = m.index + m[0].length;
+  }
+  const after = text.slice(last).trim();
+  if (after || !blocks.length) blocks.push({ type: 'text', text: after || text });
+  return blocks;
 }
 
 /** `sediment://file_…` / `file-service://file-…` → bare file id. */
@@ -259,7 +305,7 @@ export function adaptChatGptConversation(
       uuid: rep.id,
       parent_message_uuid: ancestor ? turnRep(ancestor).id : null,
       sender: effRole(rep) === 'user' ? 'human' : 'assistant',
-      content: [{ type: 'text', text: members.map((m) => m.text).filter(Boolean).join('\n\n') }],
+      content: contentBlocksOf(members.map((m) => m.text).filter(Boolean).join('\n\n')),
       created_at: new Date((rep.create || 0) * 1000).toISOString(),
       ...(files.length ? { files_v2: files } : {}),
     });

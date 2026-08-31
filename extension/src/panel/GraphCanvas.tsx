@@ -8,16 +8,18 @@ import {
   Handle,
   Position,
   useReactFlow,
+  useStore,
   type Node,
   type Edge,
   type Rect,
+  type ReactFlowInstance,
   ReactFlowProvider,
 } from '@xyflow/react';
 import type { DisplayTree, DisplayNode } from '../tree/displayTree';
 import { layoutTree, type LayoutDirection } from '../tree/layout';
 import { NodeCard, DraftQuestionCard, DraftAnswerCard, hasMedia, type DraftView, type FooterItem } from './NodeCard';
 import { HoverPreview, type PreviewItem } from './HoverPreview';
-import { CenterIcon, PlusIcon, MinusIcon } from './icons';
+import { CenterIcon, FitViewIcon, PlusIcon, MinusIcon } from './icons';
 
 /** Synthetic ids for the floating draft nodes (no real message collides). While
  *  editing, only the question node exists; once generating, a child answer node
@@ -91,6 +93,10 @@ const H_MEDIA = 220; // nodes with a footer (files / images / widgets)
 // In-place preview card — a fixed, scrollable reader (matches the floating window).
 const PREVIEW_W = 580;
 const PREVIEW_H = 560;
+// Question previews get a compact reader — prompts are usually much shorter than
+// answers, so the full-size box is mostly empty space.
+const PREVIEW_Q_W = 460;
+const PREVIEW_Q_H = 320;
 // Draft cards — a roomier box so the textarea / streaming answer fit comfortably.
 const EDITOR_W = 360;
 const EDITOR_H = 210; // editor (question while editing) + streaming answer node
@@ -101,6 +107,10 @@ const EXTENT_PAD = 300;
 // Zoom the "center" button lands on — slightly below natural size so the most
 // recent message sits centered with breathing room, not slammed to maxZoom.
 const CENTER_ZOOM = 0.9;
+const MIN_ZOOM = 0.05;
+// Screen-pixel margin kept on each side when auto-fitting an expanded card
+// that's wider than the visible canvas.
+const EXPAND_FIT_MARGIN = 56;
 
 /** Fixed height tier for a node — text-only vs. has-footer media. */
 function tierHeight(n: DisplayNode): number {
@@ -177,26 +187,32 @@ const NODE_TYPES = {
 };
 
 /**
- * Lower-left canvas controls: zoom in / out / center. Custom buttons (React
- * Flow's defaults are replaced) so all three share the panel's custom hover
- * tooltip instead of the slow native `title`. The "center" button replaces the
- * default Fit View, which can't compute bounds here — node dimensions go
- * unmeasured inside the shadow root (the quirk `seedHandles` also works around).
- * It centers the viewport on the most recent active-branch message (rect from the
- * dagre layout) at a fixed reading zoom — `fitBounds` on one small card would slam
- * to maxZoom (too close), so we pan to its center at CENTER_ZOOM instead.
+ * Lower-left canvas controls: zoom in / out / center / fit. Custom buttons (React
+ * Flow's defaults are replaced) so all share the panel's custom hover tooltip
+ * instead of the slow native `title`. "Center" frames the most recent
+ * active-branch message (rect from the dagre layout) at a fixed reading zoom —
+ * `fitBounds` on one small card would slam to maxZoom (too close), so we pan to
+ * its center at CENTER_ZOOM instead. "Fit" zooms the whole graph into view
+ * (the pre-2026-08 default open framing).
  */
-function CanvasControls({ bounds }: { bounds: Rect | null }) {
-  const { zoomIn, zoomOut, setCenter, fitView } = useReactFlow();
+function CanvasControls({ bounds, allBounds }: { bounds: Rect | null; allBounds: Rect | null }) {
+  const { zoomIn, zoomOut, setCenter, fitBounds, fitView } = useReactFlow();
+  const fitAll = useCallback(() => {
+    if (allBounds && allBounds.width > 0 && allBounds.height > 0) {
+      void fitBounds(allBounds, { padding: 0.2, duration: 400 });
+    } else {
+      void fitView({ padding: 0.2, duration: 400 });
+    }
+  }, [allBounds, fitBounds, fitView]);
   const recenter = useCallback(() => {
     if (bounds && bounds.width > 0 && bounds.height > 0) {
       const cx = bounds.x + bounds.width / 2;
       const cy = bounds.y + bounds.height / 2;
       void setCenter(cx, cy, { zoom: CENTER_ZOOM, duration: 400 });
     } else {
-      void fitView({ padding: 0.2, duration: 400 });
+      fitAll();
     }
-  }, [bounds, setCenter, fitView]);
+  }, [bounds, setCenter, fitAll]);
   return (
     <>
       <ControlButton onClick={() => zoomIn({ duration: 200 })} data-tip="Zoom in" aria-label="Zoom in">
@@ -207,6 +223,9 @@ function CanvasControls({ bounds }: { bounds: Rect | null }) {
       </ControlButton>
       <ControlButton onClick={recenter} data-tip="Center on the most recent message" aria-label="Center on the most recent message">
         <CenterIcon />
+      </ControlButton>
+      <ControlButton onClick={fitAll} data-tip="Fit the whole graph" aria-label="Fit the whole graph">
+        <FitViewIcon />
       </ControlButton>
     </>
   );
@@ -230,6 +249,51 @@ function SearchFocus({ nonce, bounds }: { nonce?: number; bounds: Rect | null })
     // changes as the user types.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce]);
+  return null;
+}
+
+/**
+ * When an in-place preview opens, make sure the expanded card actually fits the
+ * visible canvas: if its laid-out width at the current zoom is wider than the
+ * viewport, zoom out just enough to fit it and center it horizontally. Vertical
+ * position is untouched — the card's top edge keeps its on-screen y, so the
+ * view doesn't jump. If the card already fits, do nothing (today's behavior).
+ * Fires only when an id is ADDED to `previewIds` — collapsing never moves the
+ * viewport.
+ */
+function ExpandFit({
+  previewIds,
+  laid,
+}: {
+  previewIds: Set<string>;
+  laid: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+}) {
+  const { getViewport, setViewport } = useReactFlow();
+  const canvasWidth = useStore((s) => s.width);
+  const prevIds = useRef(previewIds);
+  const laidRef = useRef(laid);
+  laidRef.current = laid;
+  const widthRef = useRef(canvasWidth);
+  widthRef.current = canvasWidth;
+  useEffect(() => {
+    const prev = prevIds.current;
+    prevIds.current = previewIds;
+    if (previewIds === prev) return;
+    let addedId: string | null = null;
+    for (const id of previewIds) if (!prev.has(id)) addedId = id;
+    if (!addedId) return;
+    const n = laidRef.current.find((l) => l.id === addedId);
+    const w = widthRef.current;
+    if (!n || !w) return;
+    const vp = getViewport();
+    const avail = w - 2 * EXPAND_FIT_MARGIN;
+    if (n.width * vp.zoom <= avail) return; // fits — leave the viewport alone
+    const zoom = Math.max(MIN_ZOOM, avail / n.width);
+    const x = w / 2 - (n.x + n.width / 2) * zoom;
+    // Same on-screen y for the card's top edge before and after the zoom-out.
+    const y = n.y * vp.zoom + vp.y - n.y * zoom;
+    void setViewport({ x, y, zoom }, { duration: 300 });
+  }, [previewIds, getViewport, setViewport]);
   return null;
 }
 
@@ -366,15 +430,16 @@ export function GraphCanvas({
   const draftPresent = draft != null;
   const draftParent = draft ? draft.parentDisplayId : null;
   const draftGenerating = draft?.status === 'generating';
-  const { laid, structEdges, translateExtent } = useMemo(() => {
+  const { laid, structEdges, translateExtent, graphBounds } = useMemo(() => {
     const layoutInput: Array<{ id: string; parentId: string | null; width: number; height: number }> =
       tree.orderedNodes.map((n) => {
         const pv = previewIds.has(n.id);
+        const isQ = n.role === 'human';
         return {
           id: n.id,
           parentId: n.parentId,
-          width: pv ? PREVIEW_W : NODE_W,
-          height: pv ? PREVIEW_H : tierHeight(n),
+          width: pv ? (isQ ? PREVIEW_Q_W : PREVIEW_W) : NODE_W,
+          height: pv ? (isQ ? PREVIEW_Q_H : PREVIEW_H) : tierHeight(n),
         };
       });
     if (draftPresent) {
@@ -395,6 +460,11 @@ export function GraphCanvas({
     // Bound panning to the laid-out graph (+ one screen of slack) so scrolling
     // can't drift off into empty canvas past the first/last message.
     let extent: [[number, number], [number, number]] | undefined;
+    // Whole-graph rect from the dagre layout. Fit-to-graph must use this via
+    // `fitBounds` — React Flow's own `fitView()` reads measured node dimensions,
+    // and measurement is unreliable inside the shadow root (the same quirk
+    // `seedHandles` works around), so it silently no-ops.
+    let allBounds: Rect | null = null;
     if (laidNodes.length > 0) {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const n of laidNodes) {
@@ -407,8 +477,9 @@ export function GraphCanvas({
         [minX - EXTENT_PAD, minY - EXTENT_PAD],
         [maxX + EXTENT_PAD, maxY + EXTENT_PAD],
       ];
+      allBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
-    return { laid: laidNodes, structEdges: edges, translateExtent: extent };
+    return { laid: laidNodes, structEdges: edges, translateExtent: extent, graphBounds: allBounds };
   }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating]);
 
   const isTB = direction === 'TB';
@@ -572,6 +643,27 @@ export function GraphCanvas({
     });
   }, [structEdges, tree]);
 
+  // Default view on open: center on the most recent active-branch message at
+  // reading zoom (same framing as the lower-left "center" control) instead of
+  // fitting the whole graph — the full view is one click away on the "fit"
+  // control. Runs via onInit so the container is measured; ref keeps the
+  // callback stable across layout recomputes.
+  const recentBoundsRef = useRef(recentBounds);
+  recentBoundsRef.current = recentBounds;
+  const graphBoundsRef = useRef(graphBounds);
+  graphBoundsRef.current = graphBounds;
+  const handleInit = useCallback((inst: ReactFlowInstance) => {
+    const b = recentBoundsRef.current;
+    const g = graphBoundsRef.current;
+    if (b && b.width > 0 && b.height > 0) {
+      void inst.setCenter(b.x + b.width / 2, b.y + b.height / 2, { zoom: CENTER_ZOOM });
+    } else if (g && g.width > 0 && g.height > 0) {
+      void inst.fitBounds(g, { padding: 0.2 });
+    } else {
+      void inst.fitView({ padding: 0.2 });
+    }
+  }, []);
+
   // A vertical (TB) chat tree is tall-and-narrow; a portrait minimap shows its
   // top-to-bottom structure instead of crushing it into a landscape sliver.
   // LR layouts are wide, so flip to landscape.
@@ -584,9 +676,8 @@ export function GraphCanvas({
           nodes={nodes}
           edges={edges}
           nodeTypes={NODE_TYPES}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.05}
+          onInit={handleInit}
+          minZoom={MIN_ZOOM}
           maxZoom={1.5}
           translateExtent={translateExtent}
           proOptions={{ hideAttribution: true }}
@@ -599,9 +690,10 @@ export function GraphCanvas({
         >
           <Background gap={24} size={1} color="var(--cg-border)" />
           <Controls showZoom={false} showFitView={false} showInteractive={false}>
-            <CanvasControls bounds={recentBounds} />
+            <CanvasControls bounds={recentBounds} allBounds={graphBounds} />
           </Controls>
           <SearchFocus nonce={searchFocusNonce} bounds={currentMatchBounds} />
+          <ExpandFit previewIds={previewIds} laid={laid} />
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
