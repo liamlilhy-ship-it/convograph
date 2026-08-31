@@ -1,5 +1,5 @@
 import type { ApiContentBlock } from '../platforms/model';
-import { isComposeBlock, composeVariantsOf, composeKindLabel } from './compose';
+import { isComposeBlock, composeVariantsOf, composeKindLabel, type ComposeVariant } from './compose';
 
 export type LinkItem = { text: string; url: string };
 
@@ -80,9 +80,16 @@ export type BlockCitation = { end: number; ref: CitationRef };
  * being grouped after all the text. An md block may carry `citations` — inline
  * reference chips inserted at their `end` offsets when rendered.
  */
+/** A composed draft (email etc.) rendered as a distinct card in the full
+ *  preview: `label` names the compose kind ("Email"); each variant is one
+ *  A/B draft. Future compose kinds only need a new label — the card layout
+ *  (header / subject / markdown body) is kind-agnostic. */
+export type ComposeRef = { label: string; variants: ComposeVariant[] };
+
 export type PreviewBlock =
   | { kind: 'md'; text: string; citations?: BlockCitation[] }
-  | { kind: 'widget'; widget: WidgetRef };
+  | { kind: 'widget'; widget: WidgetRef }
+  | { kind: 'compose'; compose: ComposeRef };
 
 const FENCE_RE = /```([a-zA-Z0-9_+\-]*)\n([\s\S]*?)```/g;
 const LIST_LINE_RE = /^\s*(?:[-*+]\s+|\d+\.\s+)/;

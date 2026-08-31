@@ -1,5 +1,5 @@
 import type { ApiConversation, ApiMessage, NormalizedCitation } from '../platforms/model';
-import { isComposeBlock, composeMarkdownOf } from './compose';
+import { isComposeBlock, composeMarkdownOf, composeVariantsOf, composeKindLabel } from './compose';
 import { computeNodePreview, type NodePreview } from './preview';
 import type {
   ImageRef,
@@ -115,14 +115,15 @@ function bodyOf(msg: ApiMessage): PreviewBlock[] {
       const title = typeof c.input?.title === 'string' ? c.input.title : undefined;
       blocks.push({ kind: 'widget', widget: { title, code, isSvg: code.trim().startsWith('<svg') } });
     } else if (isComposeBlock(c)) {
-      // Composed drafts (emails) render as ordinary markdown, woven in at the
-      // block's document position — so the draft sits before any trailing
-      // commentary, matching the native chat.
-      const md = composeMarkdownOf(c);
-      if (!md) continue;
-      const base = run.length === 0 ? 0 : rawLen + SEP.length;
-      run.push(md);
-      rawLen = base + md.length;
+      // Composed drafts (emails) get their own block at the document position —
+      // the full preview renders them as a distinct card (header / subject /
+      // body) so they stand apart from surrounding commentary. The markdown
+      // weave in `textOf` still feeds search and the collapsed excerpt.
+      const variants = composeVariantsOf(c);
+      if (!variants.length) continue;
+      flush();
+      const label = composeKindLabel(typeof c.input?.kind === 'string' ? c.input.kind : undefined);
+      blocks.push({ kind: 'compose', compose: { label, variants } });
     }
   }
   flush();

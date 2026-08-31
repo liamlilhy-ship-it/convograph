@@ -4,7 +4,7 @@ import type { ContentKind, ImageRef, ArtifactRef, FileRef } from '../tree/conten
 import type { NodePreview } from '../tree/preview';
 import { renderMarkdown, renderMarkdownWithCitations } from './markdown';
 import { svgDataUri, widgetSrcDoc } from './widgetRender';
-import { UserIcon, FileIcon, AttachmentIcon, ImageIcon } from './icons';
+import { UserIcon, FileIcon, AttachmentIcon, ImageIcon, MailIcon } from './icons';
 import { usePlatformUI } from './platformUI';
 import type { FooterItem } from './NodeCard';
 
@@ -96,7 +96,17 @@ export function FullPreview({
                 ? renderMarkdownWithCitations(b.text, b.citations)
                 : renderMarkdown(b.text),
             }
-          : b,
+          : b.kind === 'compose'
+            ? {
+                kind: 'compose' as const,
+                label: b.compose.label,
+                variants: b.compose.variants.map((v) => ({
+                  label: v.label,
+                  subjectHtml: v.subject ? renderMarkdown(`Subject: ${v.subject}`) : undefined,
+                  html: renderMarkdown(v.body),
+                })),
+              }
+            : b,
       ),
     [node.body],
   );
@@ -155,6 +165,24 @@ export function FullPreview({
       {body.map((b, i) =>
         b.kind === 'md' ? (
           <div key={i} className="cg-pv-md" dangerouslySetInnerHTML={{ __html: b.html }} />
+        ) : b.kind === 'compose' ? (
+          <div key={i} className="cg-pv-compose">
+            {b.variants.map((v, j) => (
+              <div key={j} className="cg-pv-compose-card">
+                <div className="cg-pv-compose-head">
+                  <MailIcon size={12} />
+                  <span>{b.label}{v.label ? ` — ${v.label}` : ''}</span>
+                </div>
+                {v.subjectHtml && (
+                  <div
+                    className="cg-pv-compose-subject cg-pv-md"
+                    dangerouslySetInnerHTML={{ __html: v.subjectHtml }}
+                  />
+                )}
+                <div className="cg-pv-compose-body cg-pv-md" dangerouslySetInnerHTML={{ __html: v.html }} />
+              </div>
+            ))}
+          </div>
         ) : b.widget.isSvg ? (
           <img
             key={i}

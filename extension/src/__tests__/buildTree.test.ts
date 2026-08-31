@@ -173,9 +173,16 @@ describe('buildTree', () => {
     expect(node.fullText).toContain('Just checking in.');
     expect(node.fullText).toContain('**Email — Add new signal**');
     expect(node.fullText.indexOf('Just checking in.')).toBeLessThan(node.fullText.indexOf('I drafted two versions'));
-    // Body blocks carry the same markdown for the expanded reader.
-    const md = node.body.filter((b) => b.kind === 'md').map((b) => (b.kind === 'md' ? b.text : '')).join('\n');
-    expect(md).toContain('**Email — Brief check-in**');
+    // Body blocks carry a dedicated compose card for the expanded reader, in
+    // document order (draft card before the trailing commentary run).
+    expect(node.body.map((b) => b.kind)).toEqual(['compose', 'md']);
+    const card = node.body[0]!;
+    if (card.kind === 'compose') {
+      expect(card.compose.label).toBe('Email');
+      expect(card.compose.variants.map((v) => v.label)).toEqual(['Brief check-in', 'Add new signal']);
+      expect(card.compose.variants[0]!.subject).toBe('Following up — PM application');
+      expect(card.compose.variants[0]!.body).toContain('Just checking in.');
+    }
     // The email kind chip is detected with the first subject.
     const email = node.preview.kinds.find((k) => k.kind === 'email');
     expect(email && email.kind === 'email' ? email.count : 0).toBe(2);

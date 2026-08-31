@@ -1266,6 +1266,44 @@ mark.cg-search-hit[data-current="true"] {
   overflow: auto;
 }
 
+/* Composed-draft card (emails etc.) — a distinct framed surface within the
+   preview flow so the draft reads apart from the surrounding commentary.
+   Kind-agnostic: header carries the label ("Email — Brief check-in"), then an
+   optional subject row, then the markdown body. */
+.cg-pv-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0.6em 0;
+}
+.cg-pv-compose-card {
+  border: 1px solid var(--cg-border);
+  border-left: 3px solid var(--cg-accent);
+  border-radius: 10px;
+  background: var(--cg-bg-elev);
+  overflow: hidden;
+}
+.cg-pv-compose-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cg-accent);
+  background: var(--cg-accent-soft);
+}
+.cg-pv-compose-subject {
+  padding: 8px 12px 0;
+  font-weight: 600;
+}
+.cg-pv-compose-body {
+  padding: 4px 12px 10px;
+}
+.cg-pv-compose-card .cg-pv-md + .cg-pv-md { margin-top: 0; }
+
 /* Markdown body — base size is per-window adjustable (A−/A+ in the header set
    --cg-pv-fs); headings/code/tables use em so they scale with it. */
 .cg-pv-md {
