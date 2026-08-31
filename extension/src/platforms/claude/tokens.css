@@ -12,10 +12,25 @@
   --cg-find: #13a17a;
   --cg-find-soft: rgba(19, 161, 122, 0.22);
   /* Per-role node surfaces — soft, readable tints (Q = warm coral wash,
-     A = clean white) that separate question from answer without heaviness. */
-  --cg-node-q-bg: #fbf2ec;
-  --cg-node-a-bg: #ffffff;
+     A = clean white) that separate question from answer without heaviness.
+     Translucent so the panel's glass glows through the cards (the panel is
+     already blurred, so no per-node backdrop-filter is needed). */
+  --cg-node-q-bg: rgba(248, 230, 219, 0.80);
+  --cg-node-a-bg: rgba(255, 255, 255, 0.72);
   --cg-shadow: 0 6px 24px rgba(31, 30, 29, 0.10);
+  /* Liquid-glass surface for the entry pill: translucent warm-white tint (Claude's
+     beige family) + specular top highlight + hover wash; combined with
+     backdrop-filter in panel.css. */
+  --cg-glass-bg: rgba(255, 253, 250, 0.14);
+  --cg-glass-highlight: rgba(255, 255, 255, 0.95);
+  --cg-glass-hover: rgba(255, 255, 255, 0.45);
+  --cg-glass-shadow: 0 4px 16px rgba(31, 30, 29, 0.08);
+  /* Panel surface: same glass, heavier tint so node/preview text stays readable. */
+  --cg-glass-panel-bg: rgba(250, 249, 245, 0.60);
+  /* Chip = borderless wash for toolbar/search/controls on the panel glass;
+     float = heavier sheet for the draggable full-content preview window. */
+  --cg-glass-chip: rgba(255, 255, 255, 0.50);
+  --cg-glass-float-bg: rgba(250, 249, 245, 0.78);
   /* Shadows tied to the brand ink color + text-on-accent. Defined once here so
      they cascade to the dark theme too (they were theme-independent literals). */
   --cg-shadow-hover: 0 10px 28px rgba(31, 30, 29, 0.14);
@@ -39,9 +54,16 @@
   --cg-accent-soft: rgba(217, 119, 87, 0.20);
   --cg-find: #45c8a3;
   --cg-find-soft: rgba(69, 200, 163, 0.30);
-  --cg-node-q-bg: #2e2825;
-  --cg-node-a-bg: #262524;
+  --cg-node-q-bg: rgba(72, 45, 35, 0.78);
+  --cg-node-a-bg: rgba(38, 37, 36, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --cg-glass-bg: rgba(38, 37, 36, 0.16);
+  --cg-glass-highlight: rgba(255, 255, 255, 0.30);
+  --cg-glass-hover: rgba(255, 255, 255, 0.16);
+  --cg-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.30);
+  --cg-glass-panel-bg: rgba(31, 30, 29, 0.55);
+  --cg-glass-chip: rgba(255, 255, 255, 0.08);
+  --cg-glass-float-bg: rgba(31, 30, 29, 0.75);
   --cg-minimap-mask: rgba(0, 0, 0, 0.35);
   --cg-minimap-node: #6b6862;
 }

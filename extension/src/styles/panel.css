@@ -17,24 +17,50 @@
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border: 0;
+  /* Liquid glass: translucent tint over a blurred + saturated backdrop, with a
+     specular top rim (inset highlight) and a soft drop shadow for separation —
+     no border; the rim + shadow alone define the edge. */
+  background: var(--cg-glass-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   color: var(--cg-fg);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: var(--cg-shadow);
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-glass-shadow);
   user-select: none;
-  transition: background 120ms ease, border-color 120ms ease, opacity 120ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
   white-space: nowrap;
   pointer-events: auto;
   visibility: var(--cg-toggle-vis, visible);
+}
+/* No backdrop-filter support → the translucent tint alone is illegible over page
+   text, so fall back to the opaque elevated surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cg-toggle {
+    background: var(--cg-bg-elev);
+    box-shadow: var(--cg-shadow);
+  }
+  .cg-panel {
+    background: var(--cg-bg);
+  }
+  .cg-pv-window {
+    background: var(--cg-bg-elev);
+  }
 }
 .cg-toggle[data-hidden="true"] {
   visibility: hidden;
   pointer-events: none;
 }
-.cg-toggle:hover { border-color: var(--cg-accent); }
+/* Hover = a light wash *inside* the glass (full-coverage inset shadow layered
+   under the specular rim), not a colored ring around it. */
+.cg-toggle:hover {
+  box-shadow:
+    inset 0 1px 0 var(--cg-glass-highlight),
+    inset 0 0 0 999px var(--cg-glass-hover),
+    var(--cg-glass-shadow);
+}
 .cg-toggle[data-on="true"] { background: var(--cg-accent); color: white; border-color: var(--cg-accent); }
 .cg-toggle .cg-dot {
   width: 7px; height: 7px; border-radius: 50%;
@@ -50,7 +76,12 @@
   bottom: 0;
   width: var(--cg-panel-w, 480px);
   z-index: 2147483645;
-  background: var(--cg-bg);
+  /* Same liquid-glass treatment as the pill, at a heavier tint so node text
+     stays readable over busy pages. Toolbar + canvas are transparent so this
+     one surface is the panel's only backdrop. */
+  background: var(--cg-glass-panel-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   border-left: 1px solid var(--cg-border-strong);
   display: flex;
   flex-direction: column;
@@ -94,7 +125,7 @@
   gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--cg-border);
-  background: var(--cg-bg);
+  background: transparent;
   flex-wrap: wrap;
 }
 .cg-toolbar h1 {
@@ -110,11 +141,14 @@
   font-size: 12px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border-radius: 8px;
+  /* Glass chip: no border — a translucent wash on the panel's glass. States
+     tint the wash (accent on hover/pressed) instead of recoloring a border. */
+  border: 0;
+  background: var(--cg-glass-chip);
   color: var(--cg-fg);
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 /* The button row sits above the status row below it, so a button's tooltip
    (which drops downward) paints over the status text instead of behind it. */
@@ -122,7 +156,7 @@
   position: relative;
   z-index: 2;
 }
-.cg-toolbar button:hover { border-color: var(--cg-accent); }
+.cg-toolbar button:hover { background: var(--cg-accent-soft); color: var(--cg-accent); }
 /* Icon-only toolbar button (e.g. full-screen toggle): center the SVG glyph. */
 .cg-toolbar button.cg-iconbtn {
   display: inline-flex;
@@ -131,7 +165,7 @@
   padding: 0 8px;
 }
 .cg-toolbar button[aria-pressed="true"] {
-  border-color: var(--cg-accent);
+  background: var(--cg-accent-soft);
   color: var(--cg-accent);
 }
 .cg-toolbar .cg-status {
@@ -169,15 +203,14 @@
   font-size: 12px;
   height: 28px;
   padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid var(--cg-border-strong);
-  background: var(--cg-bg-elev);
+  border-radius: 8px;
+  border: 0;
+  background: var(--cg-glass-chip);
   color: var(--cg-fg);
 }
 .cg-search-input::placeholder { color: var(--cg-fg-muted); }
 .cg-search-input:focus {
   outline: none;
-  border-color: var(--cg-accent);
   box-shadow: 0 0 0 2px var(--cg-accent-soft);
 }
 .cg-search-count {
@@ -190,15 +223,15 @@
   opacity: 0.4;
   cursor: default;
 }
-.cg-search button[disabled]:hover { border-color: var(--cg-border-strong); }
+.cg-search button[disabled]:hover { background: var(--cg-glass-chip); color: var(--cg-fg); }
 
 .cg-canvas {
   flex: 1;
   position: relative;
+  /* Dot grid only — the panel's glass surface shows through beneath it. */
   background:
     radial-gradient(circle at 1px 1px, var(--cg-border) 1px, transparent 0)
-      0 0 / 24px 24px,
-    var(--cg-bg);
+      0 0 / 24px 24px;
 }
 
 /* ===== Full-screen mode ===== */
@@ -228,7 +261,7 @@
   flex-direction: column;
   background: var(--cg-bg-elev);
   border: 1px solid var(--cg-border);
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: var(--cg-shadow);
   font-size: 14px;
   line-height: 1.45;
@@ -775,9 +808,13 @@ mark.cg-search-hit[data-current="true"] {
 }
 .react-flow__controls button {
   position: relative; /* anchor for the custom hover tooltip (::after) */
-  background: var(--cg-bg-elev) !important;
-  border-color: var(--cg-border) !important;
+  background: var(--cg-glass-chip) !important;
+  border-color: transparent !important;
   color: var(--cg-fg) !important;
+}
+.react-flow__controls button:hover {
+  background: var(--cg-accent-soft) !important;
+  color: var(--cg-accent) !important;
 }
 /* Let a control's tooltip extend past the control stack (it opens to the right). */
 .react-flow__controls { overflow: visible; }
@@ -787,9 +824,10 @@ mark.cg-search-hit[data-current="true"] {
   /* Width/height come from the React Flow `style` prop (so its internal scale
      matches the rendered box); orientation flips with the layout direction. */
   margin: 10px;
-  border: 1px solid var(--cg-border);
-  border-radius: 8px;
-  box-shadow: var(--cg-shadow);
+  border: 0;
+  border-radius: 10px;
+  background: var(--cg-glass-chip);
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-shadow);
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
@@ -1086,10 +1124,14 @@ mark.cg-search-hit[data-current="true"] {
   flex-direction: column;
   min-width: 320px;
   min-height: 200px;
-  background: var(--cg-bg-elev);
-  border: 1px solid var(--cg-border-strong);
-  border-radius: 12px;
-  box-shadow: var(--cg-shadow-float);
+  /* Floating glass sheet: heavier tint than the panel (long-form reading) over
+     its own backdrop blur, edged by the specular rim instead of a border. */
+  background: var(--cg-glass-float-bg);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-shadow-float);
   overflow: hidden;
   pointer-events: auto;
 }
@@ -1100,7 +1142,7 @@ mark.cg-search-hit[data-current="true"] {
   gap: 7px;
   height: 34px;
   padding: 0 8px 0 12px;
-  background: var(--cg-bg);
+  background: transparent;
   border-bottom: 1px solid var(--cg-border);
   cursor: grab;
   user-select: none;
