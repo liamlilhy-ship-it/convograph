@@ -8,6 +8,7 @@ import {
   Handle,
   Position,
   useReactFlow,
+  useStore,
   type Node,
   type Edge,
   type Rect,
@@ -106,6 +107,10 @@ const EXTENT_PAD = 300;
 // Zoom the "center" button lands on — slightly below natural size so the most
 // recent message sits centered with breathing room, not slammed to maxZoom.
 const CENTER_ZOOM = 0.9;
+const MIN_ZOOM = 0.05;
+// Screen-pixel margin kept on each side when auto-fitting an expanded card
+// that's wider than the visible canvas.
+const EXPAND_FIT_MARGIN = 56;
 
 /** Fixed height tier for a node — text-only vs. has-footer media. */
 function tierHeight(n: DisplayNode): number {
@@ -244,6 +249,51 @@ function SearchFocus({ nonce, bounds }: { nonce?: number; bounds: Rect | null })
     // changes as the user types.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce]);
+  return null;
+}
+
+/**
+ * When an in-place preview opens, make sure the expanded card actually fits the
+ * visible canvas: if its laid-out width at the current zoom is wider than the
+ * viewport, zoom out just enough to fit it and center it horizontally. Vertical
+ * position is untouched — the card's top edge keeps its on-screen y, so the
+ * view doesn't jump. If the card already fits, do nothing (today's behavior).
+ * Fires only when an id is ADDED to `previewIds` — collapsing never moves the
+ * viewport.
+ */
+function ExpandFit({
+  previewIds,
+  laid,
+}: {
+  previewIds: Set<string>;
+  laid: Array<{ id: string; x: number; y: number; width: number; height: number }>;
+}) {
+  const { getViewport, setViewport } = useReactFlow();
+  const canvasWidth = useStore((s) => s.width);
+  const prevIds = useRef(previewIds);
+  const laidRef = useRef(laid);
+  laidRef.current = laid;
+  const widthRef = useRef(canvasWidth);
+  widthRef.current = canvasWidth;
+  useEffect(() => {
+    const prev = prevIds.current;
+    prevIds.current = previewIds;
+    if (previewIds === prev) return;
+    let addedId: string | null = null;
+    for (const id of previewIds) if (!prev.has(id)) addedId = id;
+    if (!addedId) return;
+    const n = laidRef.current.find((l) => l.id === addedId);
+    const w = widthRef.current;
+    if (!n || !w) return;
+    const vp = getViewport();
+    const avail = w - 2 * EXPAND_FIT_MARGIN;
+    if (n.width * vp.zoom <= avail) return; // fits — leave the viewport alone
+    const zoom = Math.max(MIN_ZOOM, avail / n.width);
+    const x = w / 2 - (n.x + n.width / 2) * zoom;
+    // Same on-screen y for the card's top edge before and after the zoom-out.
+    const y = n.y * vp.zoom + vp.y - n.y * zoom;
+    void setViewport({ x, y, zoom }, { duration: 300 });
+  }, [previewIds, getViewport, setViewport]);
   return null;
 }
 
@@ -627,7 +677,7 @@ export function GraphCanvas({
           edges={edges}
           nodeTypes={NODE_TYPES}
           onInit={handleInit}
-          minZoom={0.05}
+          minZoom={MIN_ZOOM}
           maxZoom={1.5}
           translateExtent={translateExtent}
           proOptions={{ hideAttribution: true }}
@@ -643,6 +693,7 @@ export function GraphCanvas({
             <CanvasControls bounds={recentBounds} allBounds={graphBounds} />
           </Controls>
           <SearchFocus nonce={searchFocusNonce} bounds={currentMatchBounds} />
+          <ExpandFit previewIds={previewIds} laid={laid} />
           <MiniMap
             className={`cg-minimap${mapVisible ? ' is-visible' : ''}`}
             style={minimapStyle}
