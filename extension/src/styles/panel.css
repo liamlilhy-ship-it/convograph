@@ -433,12 +433,11 @@ mark.cg-search-hit[data-current="true"] {
 .cg-node .cg-text > :last-child {
   margin-bottom: 0;
 }
-/* Answers use a taller card, so their snippet clamp follows the card height.
-   TEMP: the count comes from the App size tuner via --cg-node-clamp-a; freeze
-   it to a literal once the default is finalized. (Cards with a footer or rich
-   block keep their own clamps — the :has rules below outrank this one.) */
+/* Answers use the taller 240px card — 7 lines at 18px/1.45. (Cards with a
+   footer or rich block keep their own clamps — the :has rules below outrank
+   this one.) */
 .cg-node[data-role='assistant'] .cg-text {
-  -webkit-line-clamp: var(--cg-node-clamp-a, 7);
+  -webkit-line-clamp: 7;
 }
 /* Footer (files / images / attachments) is pinned to the card's bottom edge, so
    the snippet can run long and fill the space above it — more lines = less dead
@@ -451,41 +450,6 @@ mark.cg-search-hit[data-current="true"] {
    rule for a card that has both). */
 .cg-node:has(.cg-rich) .cg-text {
   -webkit-line-clamp: 3;
-}
-
-/* TEMP: collapsed-node size tuner (remove with the App tuner block). */
-.cg-size-tuner {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--cg-glass-float-bg);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  backdrop-filter: blur(40px) saturate(200%);
-  box-shadow: inset 0 1px 0 var(--cg-glass-highlight), var(--cg-shadow);
-  font-size: 11px;
-  color: var(--cg-fg);
-  white-space: nowrap;
-}
-.cg-size-tuner-label {
-  font-weight: 600;
-  color: var(--cg-muted);
-}
-.cg-size-tuner label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-variant-numeric: tabular-nums;
-}
-.cg-size-tuner input[type='range'] {
-  width: 90px;
-  accent-color: var(--cg-accent);
 }
 
 /* Sibling-diff highlight (regenerate case). Keep calm: subtle bg, no underline. */

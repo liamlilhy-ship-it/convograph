@@ -395,11 +395,6 @@ export type GraphCanvasProps = {
   searchFocusNonce?: number;
   /** The floating draft node (edit / follow-up / regenerate), if open. */
   draft: DraftState | null;
-  /** TEMP (default-size tuning): override for the collapsed card size — width
-   *  (both roles) and the ANSWER text-tier height in px (questions are fixed at
-   *  H_TEXT_Q). Falls back to the built-in constants. Remove together with the
-   *  App tuner once the default is finalized. */
-  nodeSize?: { w: number; h: number };
   /** A draft is open anywhere — disable all real nodes' quick-action buttons. */
   locked: boolean;
   /** Tooltip explaining why the actions are disabled. */
@@ -427,7 +422,6 @@ export function GraphCanvas({
   currentMatchOccurrence,
   searchFocusNonce,
   draft,
-  nodeSize,
   locked,
   lockReason,
   onStartEdit,
@@ -510,8 +504,6 @@ export function GraphCanvas({
   const draftPresent = draft != null;
   const draftParent = draft ? draft.parentDisplayId : null;
   const draftGenerating = draft?.status === 'generating';
-  const nodeW = nodeSize?.w ?? NODE_W;
-  const answerH = nodeSize?.h ?? H_TEXT_A;
   const { laid, structEdges, translateExtent, graphBounds } = useMemo(() => {
     const layoutInput: Array<{ id: string; parentId: string | null; width: number; height: number }> =
       tree.orderedNodes.map((n) => {
@@ -520,8 +512,8 @@ export function GraphCanvas({
         return {
           id: n.id,
           parentId: n.parentId,
-          width: pv ? (isQ ? PREVIEW_Q_W : PREVIEW_W) : nodeW,
-          height: pv ? (isQ ? PREVIEW_Q_H : PREVIEW_H) : tierHeight(n, isQ ? H_TEXT_Q : answerH),
+          width: pv ? (isQ ? PREVIEW_Q_W : PREVIEW_W) : NODE_W,
+          height: pv ? (isQ ? PREVIEW_Q_H : PREVIEW_H) : tierHeight(n, isQ ? H_TEXT_Q : H_TEXT_A),
         };
       });
     if (draftPresent) {
@@ -562,7 +554,7 @@ export function GraphCanvas({
       allBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
     return { laid: laidNodes, structEdges: edges, translateExtent: extent, graphBounds: allBounds };
-  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating, nodeW, answerH]);
+  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating]);
 
   const isTB = direction === 'TB';
   const targetPos = isTB ? Position.Top : Position.Left;
