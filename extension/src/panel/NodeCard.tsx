@@ -123,7 +123,14 @@ export function NodeCard({
   const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes } = usePlatformUI();
   const isHuman = node.role === 'human';
   const p = node.preview;
-  const text = isHuman ? p.title : p.body || p.title;
+  const text = p.bodyMd || (isHuman ? p.title : p.body || p.title);
+  // Folded snippet renders as real markdown (same treatment as the expanded
+  // reader — paragraphs, bold, lists), with sibling-diff tokens marked in a
+  // post-pass over the HTML.
+  const snippetHtml = useMemo(
+    () => (text ? highlightHtml(renderMarkdown(text), p.highlights) : ''),
+    [text, p.highlights],
+  );
   const hover: HoverApi = { onPreview, onPreviewEnd };
   const thumbs = collectThumbs(p);
   // A media-only turn (ChatGPT image upload / generated image) with no text: show
@@ -275,7 +282,7 @@ export function NodeCard({
           <div className="cg-body">
             <div className="cg-content">
               {text ? (
-                <div className="cg-snippet cg-text">{renderText(text, p.highlights)}</div>
+                <div className="cg-snippet cg-text" dangerouslySetInnerHTML={{ __html: snippetHtml }} />
               ) : inlineMedia ? (
                 <div className="cg-inline-media">
                   <ThumbStrip thumbs={thumbs} hover={hover} onOpenMedia={onOpenMedia} />
@@ -809,6 +816,9 @@ function RichKinds({ preview }: { preview: NodePreview }) {
     if (k.kind === 'image' || k.kind === 'widget' || k.kind === 'artifact' || k.kind === 'attachment') {
       continue;
     }
+    // Lists render inside the markdown snippet itself now — a list block here
+    // would just duplicate them.
+    if (k.kind === 'list') continue;
     if (heavy >= MAX_RICH) continue;
     heavy++;
     out.push(<KindBlock key={chipKey(k)} kind={k} />);
@@ -943,17 +953,35 @@ function prettyLang(lang: string): string {
  * Renders snippet text, wrapping any tokens listed in `highlights` in <mark>
  * for sibling-diff emphasis. Case-insensitive, whole-word only.
  */
-function renderText(text: string, highlights: string[]): ReactNode {
-  if (!highlights.length) return text;
+/** Wraps sibling-diff tokens in `<mark class="cg-diff">` within rendered
+ *  snippet HTML — a text-node walk, so markup and attributes are never
+ *  touched. Pure string→string (DOMParser), safe to memoize. */
+function highlightHtml(html: string, highlights: string[]): string {
+  if (!highlights.length) return html;
   const set = new Set(highlights.map((h) => h.toLowerCase()));
-  const parts = text.split(/(\b[A-Za-z][A-Za-z0-9'-]*\b)/);
-  return parts.map((part, i) =>
-    set.has(part.toLowerCase()) ? (
-      <mark className="cg-diff" key={i}>
-        {part}
-      </mark>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const root = doc.body.firstElementChild;
+  if (!root) return html;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const texts: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
+  for (const tn of texts) {
+    const s = tn.nodeValue ?? '';
+    const parts = s.split(/(\b[A-Za-z][A-Za-z0-9'-]*\b)/);
+    if (!parts.some((part) => set.has(part.toLowerCase()))) continue;
+    const frag = doc.createDocumentFragment();
+    for (const part of parts) {
+      if (!part) continue;
+      if (set.has(part.toLowerCase())) {
+        const m = doc.createElement('mark');
+        m.className = 'cg-diff';
+        m.textContent = part;
+        frag.appendChild(m);
+      } else {
+        frag.appendChild(doc.createTextNode(part));
+      }
+    }
+    tn.parentNode?.replaceChild(frag, tn);
+  }
+  return root.innerHTML;
 }

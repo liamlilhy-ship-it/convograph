@@ -106,7 +106,7 @@ function pairId(humanId: string, assistantId: string | null): string {
 }
 
 function emptyPreview(): NodePreview {
-  return { title: '', body: '', kinds: [], wordCount: 0, highlights: [] };
+  return { title: '', body: '', bodyMd: '', kinds: [], wordCount: 0, highlights: [] };
 }
 
 /**
@@ -252,6 +252,7 @@ function mergeAnswerPreview(steps: TreeNode[]): NodePreview {
   return {
     title: last.title,
     body: last.body,
+    bodyMd: last.bodyMd,
     kinds: mergeKinds(steps.map((s) => s.preview.kinds)),
     wordCount: steps.reduce((n, s) => n + s.preview.wordCount, 0),
     highlights: [],

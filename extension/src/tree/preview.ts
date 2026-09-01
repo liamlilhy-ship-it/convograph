@@ -1,5 +1,5 @@
 import type { ApiContentBlock } from '../platforms/model';
-import { pickTitle, pickBody, wordCountOf } from './snippet';
+import { pickTitle, pickBody, pickBodyMd, wordCountOf } from './snippet';
 import { detectKinds, type ContentKind, type MediaRefs } from './contentKinds';
 
 export type NodePreview = {
@@ -7,6 +7,9 @@ export type NodePreview = {
   title: string;
   /** Longer multi-sentence excerpt (used for the answer half). */
   body: string;
+  /** Markdown-preserving excerpt for the folded card — keeps newlines and
+   *  inline markup so the snippet renders like the expanded reader. */
+  bodyMd: string;
   kinds: ContentKind[];
   wordCount: number;
   /** Tokens the renderer should visually highlight. Set by sibling diff. */
@@ -35,6 +38,8 @@ export function computeNodePreview(
   return {
     title,
     body: pickBody(text),
+    // Questions clamp tighter (compact card); answers get the taller card.
+    bodyMd: pickBodyMd(text, role === 'human' ? 240 : 520),
     kinds,
     wordCount: wordCountOf(text),
     highlights: [],
