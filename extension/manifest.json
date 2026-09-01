@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "description": "Visualize claude.ai and ChatGPT conversations as a tree of branches. Hover to preview, click to jump.",
   "host_permissions": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
+  "background": {
+    "service_worker": "src/background.ts",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
@@ -27,6 +31,7 @@
     }
   ],
   "action": {
-    "default_title": "Conversation Graph"
+    "default_title": "Convograph",
+    "default_popup": "src/popup/popup.html"
   }
 }

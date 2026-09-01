@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* Deliberately platform-neutral: Convograph serves both Claude and
+         ChatGPT, so the popup avoids either product's design language —
+         plain surfaces, a graphite switch, and a dual-tone brand dot. */
+      :root {
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: rgba(26, 26, 26, 0.58);
+        --border: rgba(26, 26, 26, 0.12);
+        --track: rgba(26, 26, 26, 0.18);
+        --track-on: #3a3a3a;
+        --knob: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #202020;
+          --fg: #f2f2f2;
+          --muted: rgba(242, 242, 242, 0.58);
+          --border: rgba(242, 242, 242, 0.14);
+          --track: rgba(242, 242, 242, 0.22);
+          --track-on: #e6e6e6;
+          --knob: #202020;
+        }
+      }
+      body {
+        margin: 0;
+        width: 232px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 12px 8px;
+        font-weight: 600;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--fg);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 9px 12px 11px;
+        border-top: 1px solid var(--border);
+      }
+      .hint {
+        padding: 0 12px 10px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      /* Toggle switch */
+      .switch {
+        position: relative;
+        width: 34px;
+        height: 20px;
+        flex: none;
+      }
+      .switch input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+      .slider {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: var(--track);
+        transition: background 0.15s;
+        pointer-events: none;
+      }
+      .slider::before {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--knob);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        transition: transform 0.15s;
+      }
+      .switch input:checked + .slider {
+        background: var(--track-on);
+      }
+      .switch input:checked + .slider::before {
+        transform: translateX(14px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="head"><span class="dot"></span>Convograph</div>
+    <label class="row" for="pill-toggle">
+      <span>Show pill on chats</span>
+      <span class="switch">
+        <input id="pill-toggle" type="checkbox" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <div class="hint">Applies to Claude and ChatGPT, on every open tab.</div>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>
