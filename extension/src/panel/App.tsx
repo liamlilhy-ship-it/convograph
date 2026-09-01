@@ -14,6 +14,7 @@ import { PlatformUIProvider, assistantIconFor, type PlatformUI } from './platfor
 import type { DraftKind, FooterItem } from './NodeCard';
 import type { LayoutDirection } from '../tree/layout';
 import { FullscreenIcon, ExitFullscreenIcon, SearchIcon } from './icons';
+import { getSetting, onSettingChange } from '../lib/settingsClient';
 
 /**
  * A pending quick-action draft. Drives the floating draft node on the canvas and
@@ -84,6 +85,10 @@ const UNREACHABLE_TOAST = "This message isn't loaded in the chat. Scroll to it i
 
 export function App({ platform }: { platform: Platform }) {
   const [open, setOpen] = useState(false);
+  // User preference (toggled in the toolbar popup): hide the entry pill
+  // everywhere. Applies above platform/surface gating; the background
+  // broadcasts changes so every open tab reacts live.
+  const [pillHidden, setPillHidden] = useState(false);
   // Full-screen: the panel fills the viewport instead of the right side. Same
   // capabilities, EXCEPT click-to-jump is disabled (the native chat it would
   // scroll is hidden behind the graph). Reset whenever the panel closes.
@@ -283,6 +288,24 @@ export function App({ platform }: { platform: Platform }) {
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+
+  // Pill visibility preference: read once, then follow toolbar-icon toggles from
+  // any tab. Hiding also closes an open panel — the pill is the entry point, so
+  // hiding it reads as "put Convograph away".
+  useEffect(() => {
+    let alive = true;
+    void getSetting('pillHidden').then((v) => {
+      if (alive) setPillHidden(v);
+    });
+    const off = onSettingChange('pillHidden', setPillHidden);
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  useEffect(() => {
+    if (pillHidden) setOpen(false);
+  }, [pillHidden]);
 
   // On EXITING full-screen, replay the scroll for the node jumped to while in
   // full-screen: that jump's scroll happened while the chat was hidden behind the
@@ -830,11 +853,11 @@ export function App({ platform }: { platform: Platform }) {
         ref={toggleRef}
         className="cg-toggle"
         data-on={open ? 'true' : 'false'}
-        data-hidden={open ? 'true' : 'false'}
+        data-hidden={open || pillHidden ? 'true' : 'false'}
         onClick={() => setOpen((v) => !v)}
         title="Open graph mode (⌘⇧G)"
         style={toggleStyle}
-        aria-hidden={open}
+        aria-hidden={open || pillHidden}
       >
         <span className="cg-dot" />
         Convograph
