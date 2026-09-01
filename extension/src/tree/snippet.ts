@@ -117,6 +117,27 @@ export function pickBody(text: string, maxChars = MAX_BODY): string {
   return slice.replace(/\s+\S*$/, '') + '…';
 }
 
+/**
+ * Markdown-preserving excerpt for the folded card: keeps newlines and inline
+ * markup (bold / lists) so the snippet renders with the same treatment as the
+ * expanded reader. Code fences are stripped (the code chip summarizes them).
+ * Clamped near maxChars at a paragraph or sentence boundary.
+ */
+export function pickBodyMd(text: string, maxChars: number): string {
+  // Fences and tables are summarized by their own kind blocks (code / table
+  // chips) — keep them out of the snippet so they aren't shown twice.
+  const cleaned = stripFences(text)
+    .split('\n')
+    .filter((l) => !/^\s*\|.*\|\s*$/.test(l))
+    .join('\n')
+    .trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  const slice = cleaned.slice(0, maxChars);
+  const lastBreak = Math.max(slice.lastIndexOf('\n'), slice.lastIndexOf('. '));
+  if (lastBreak >= maxChars * 0.5) return slice.slice(0, lastBreak + 1);
+  return slice.replace(/\s+\S*$/, '') + '…';
+}
+
 export function wordCountOf(text: string): number {
   return wordCount(text);
 }

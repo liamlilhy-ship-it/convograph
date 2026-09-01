@@ -16,7 +16,7 @@ function makeNode(
     role: opts.role ?? 'human',
     parentId: null,
     childIds: [],
-    preview: { title: '', body: '', kinds: opts.kinds ?? [], wordCount: 0, highlights: [] },
+    preview: { title: '', body: '', bodyMd: '', kinds: opts.kinds ?? [], wordCount: 0, highlights: [] },
     fullText,
     body: [],
     questionText: fullText,

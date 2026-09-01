@@ -40,7 +40,12 @@ for (let i = 0; i < 6; i++) {
     parent_message_uuid: `u${i}`,
     sender: 'assistant',
     created_at: new Date(1700000000000 + i * 120000 + 60000).toISOString(),
-    content: [{ type: 'text', text: `Answer ${i}: ${LONG} ${LONG}` }],
+    content: [
+      {
+        type: 'text',
+        text: `Answer ${i}: the **key point** comes first.\n\n- One supporting item\n- Another *emphasized* item\n\n${LONG} ${LONG}`,
+      },
+    ],
   });
 }
 const CONV: ApiConversation = {

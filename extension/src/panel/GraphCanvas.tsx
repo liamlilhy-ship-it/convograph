@@ -86,10 +86,13 @@ type CgDraftAData = {
   onCancel: () => void;
 };
 
-// Single-role cards come in two fixed height tiers so same-content nodes match.
-const NODE_W = 360;
-const H_TEXT = 152; // text-only (and inline code/table/list/links) nodes
-const H_MEDIA = 220; // nodes with a footer (files / images / widgets)
+// Single-role cards come in fixed height tiers so same-content nodes match.
+// Questions stay compact (prompts are short); answers get a taller card so
+// more of the reply reads in place.
+const NODE_W = 400;
+const H_TEXT_Q = 152; // question text tier
+const H_TEXT_A = 240; // answer text tier
+const MEDIA_EXTRA = 68; // extra footer allowance (files / images / widgets)
 // In-place preview card — a fixed, scrollable reader (matches the floating window).
 const PREVIEW_W = 580;
 const PREVIEW_H = 560;
@@ -112,9 +115,10 @@ const MIN_ZOOM = 0.05;
 // that's wider than the visible canvas.
 const EXPAND_FIT_MARGIN = 56;
 
-/** Fixed height tier for a node — text-only vs. has-footer media. */
-function tierHeight(n: DisplayNode): number {
-  return hasMedia(n.preview) ? H_MEDIA : H_TEXT;
+/** Fixed height tier for a node — text-only vs. has-footer media. `base` is the
+ *  role's text-tier height; media nodes get the footer allowance on top. */
+function tierHeight(n: DisplayNode, base: number): number {
+  return hasMedia(n.preview) ? base + MEDIA_EXTRA : base;
 }
 
 /** Seeded handle geometry (edge-center of each card). The shadow-root quirk that
@@ -391,6 +395,11 @@ export type GraphCanvasProps = {
   searchFocusNonce?: number;
   /** The floating draft node (edit / follow-up / regenerate), if open. */
   draft: DraftState | null;
+  /** TEMP (default-size tuning): override for the collapsed card size — width
+   *  (both roles) and the ANSWER text-tier height in px (questions are fixed at
+   *  H_TEXT_Q). Falls back to the built-in constants. Remove together with the
+   *  App tuner once the default is finalized. */
+  nodeSize?: { w: number; h: number };
   /** A draft is open anywhere — disable all real nodes' quick-action buttons. */
   locked: boolean;
   /** Tooltip explaining why the actions are disabled. */
@@ -418,6 +427,7 @@ export function GraphCanvas({
   currentMatchOccurrence,
   searchFocusNonce,
   draft,
+  nodeSize,
   locked,
   lockReason,
   onStartEdit,
@@ -500,6 +510,8 @@ export function GraphCanvas({
   const draftPresent = draft != null;
   const draftParent = draft ? draft.parentDisplayId : null;
   const draftGenerating = draft?.status === 'generating';
+  const nodeW = nodeSize?.w ?? NODE_W;
+  const answerH = nodeSize?.h ?? H_TEXT_A;
   const { laid, structEdges, translateExtent, graphBounds } = useMemo(() => {
     const layoutInput: Array<{ id: string; parentId: string | null; width: number; height: number }> =
       tree.orderedNodes.map((n) => {
@@ -508,8 +520,8 @@ export function GraphCanvas({
         return {
           id: n.id,
           parentId: n.parentId,
-          width: pv ? (isQ ? PREVIEW_Q_W : PREVIEW_W) : NODE_W,
-          height: pv ? (isQ ? PREVIEW_Q_H : PREVIEW_H) : tierHeight(n),
+          width: pv ? (isQ ? PREVIEW_Q_W : PREVIEW_W) : nodeW,
+          height: pv ? (isQ ? PREVIEW_Q_H : PREVIEW_H) : tierHeight(n, isQ ? H_TEXT_Q : answerH),
         };
       });
     if (draftPresent) {
@@ -550,7 +562,7 @@ export function GraphCanvas({
       allBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
     }
     return { laid: laidNodes, structEdges: edges, translateExtent: extent, graphBounds: allBounds };
-  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating]);
+  }, [tree, direction, previewIds, draftPresent, draftParent, draftGenerating, nodeW, answerH]);
 
   const isTB = direction === 'TB';
   const targetPos = isTB ? Position.Top : Position.Left;
