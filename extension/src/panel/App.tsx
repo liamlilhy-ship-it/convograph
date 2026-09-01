@@ -89,10 +89,6 @@ export function App({ platform }: { platform: Platform }) {
   // everywhere. Applies above platform/surface gating; the background
   // broadcasts changes so every open tab reacts live.
   const [pillHidden, setPillHidden] = useState(false);
-  // TEMP: collapsed-node size under tuning (see the cg-size-tuner block below).
-  // `w` applies to both roles; `h` is the ANSWER card height (questions are
-  // fixed). Defaults match the current NODE_W / H_TEXT_A.
-  const [nodeSize, setNodeSize] = useState({ w: 400, h: 240 });
   // Full-screen: the panel fills the viewport instead of the right side. Same
   // capabilities, EXCEPT click-to-jump is disabled (the native chat it would
   // scroll is hidden behind the graph). Reset whenever the panel closes.
@@ -872,13 +868,7 @@ export function App({ platform }: { platform: Platform }) {
           role="complementary"
           aria-label="Conversation graph"
           data-fullscreen={fullscreen ? 'true' : 'false'}
-          style={{
-            ['--cg-panel-w' as never]: `${panelW}px`,
-            // TEMP: the answer snippet's line count follows the tuned card
-            // height (~26.1px per 18px/1.45 line after ~48px of card chrome);
-            // floor so a partial line never gets clipped. 240px ⇒ 7 lines.
-            ['--cg-node-clamp-a' as never]: Math.max(2, Math.floor((nodeSize.h - 48) / 26.1)),
-          }}
+          style={{ ['--cg-panel-w' as never]: `${panelW}px` }}
         >
           <div
             className="cg-resize"
@@ -957,7 +947,6 @@ export function App({ platform }: { platform: Platform }) {
               currentMatchOccurrence={currentMatchOccurrence}
               searchFocusNonce={searchFocusNonce}
               draft={draft}
-              nodeSize={nodeSize}
               locked={draft != null}
               lockReason={
                 draft
@@ -984,35 +973,6 @@ export function App({ platform }: { platform: Platform }) {
             </div>
           )}
           {toast && <div className="cg-toast">{toast}</div>}
-          {/* TEMP: collapsed-node size tuner — live-adjust width/height to pick
-              a new default, then remove (along with the nodeSize state/prop). */}
-          <div className="cg-size-tuner">
-            <span className="cg-size-tuner-label">Node size (temp)</span>
-            <label>
-              W
-              <input
-                type="range"
-                min={280}
-                max={560}
-                step={4}
-                value={nodeSize.w}
-                onChange={(e) => setNodeSize((s) => ({ ...s, w: Number(e.target.value) }))}
-              />
-              {nodeSize.w}
-            </label>
-            <label>
-              H·answer
-              <input
-                type="range"
-                min={140}
-                max={320}
-                step={2}
-                value={nodeSize.h}
-                onChange={(e) => setNodeSize((s) => ({ ...s, h: Number(e.target.value) }))}
-              />
-              {nodeSize.h}
-            </label>
-          </div>
         </aside>
       )}
       {open && (
