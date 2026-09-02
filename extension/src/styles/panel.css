@@ -277,11 +277,22 @@
    Hovering a dimmed card restores it to full strength to signal interactivity. */
 .cg-node[data-active="false"]:not(:hover) { opacity: 0.5; }
 /* Platforms with no in-place branch switch (ChatGPT, data-branch-switch="false"):
-   every branch is read right on the canvas, so off-path cards stay at full
-   strength and keep their role colours. The current branch is marked by its
-   PATH instead: solid accent edges (below) while every other connector is
-   dashed grey. Active cards keep the same accent ring as elsewhere. */
+   every branch is read right on the canvas, so off-path cards are not faded —
+   their text stays at full strength. Instead they sit on neutral grey surfaces
+   (the platform's *-inactive-bg tokens) with a grey top rule and muted role
+   label, while current-branch cards keep the normal Q/A colours, the accent
+   ring, and solid accent edges (every other connector is dashed, below). */
 .cg-panel[data-branch-switch="false"] .cg-node[data-active="false"]:not(:hover) { opacity: 1; }
+.cg-panel[data-branch-switch="false"] .cg-node[data-active="false"][data-role="human"] {
+  background: var(--cg-node-q-inactive-bg);
+  border-top-color: var(--cg-border-strong);
+}
+.cg-panel[data-branch-switch="false"] .cg-node[data-active="false"][data-role="assistant"] {
+  background: var(--cg-node-a-inactive-bg);
+}
+.cg-panel[data-branch-switch="false"] .cg-node[data-active="false"] .cg-role {
+  color: var(--cg-fg-muted);
+}
 .cg-panel[data-branch-switch="false"] .react-flow__edge:not(.cg-edge-active):not(.cg-edge-draft) .react-flow__edge-path {
   stroke-dasharray: 5 4;
 }
