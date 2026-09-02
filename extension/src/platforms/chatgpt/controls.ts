@@ -6,7 +6,8 @@
  * users (the "Couldn't find ChatGPT's edit control" report came from a Chinese UI).
  * We match on LANGUAGE-INDEPENDENT signals instead, verified live across en/zh:
  *   - `data-testid`            — copy/like/dislike (stable, semantic hooks)
- *   - `svg[data-rtl-flip]`     — only the branch ‹ › arrows carry this
+ *   - `svg[data-rtl-flip]`     — the old branch ‹ › arrows carried this (gone since
+ *                                Sept 2026; still excluded defensively)
  *   - `aria-haspopup="menu"`   — only the menu triggers (Switch model, More actions)
  * The sprite-icon `#fragment` is language-independent too, but its ids are opaque
  * hashes that change on deploy, so we deliberately don't key on them.
@@ -22,7 +23,9 @@
 /** A button reduced to the signals the locator reasons about. */
 export type BtnInfo = {
   testid: string | null;
-  /** A branch ‹/› arrow — its icon `<svg>` carries `data-rtl-flip`. */
+  /** The icon `<svg>` carries `data-rtl-flip` — the marker of the old branch ‹/›
+   *  arrows, which ChatGPT dropped in Sept 2026 for a "See versions" modal. Kept
+   *  as a defensive exclusion in `pickEdit`. */
   rtlFlip: boolean;
   /** `aria-haspopup` value (e.g. "menu" for the Switch-model / More-actions triggers). */
   haspopup: string | null;
@@ -142,14 +145,4 @@ export function findTryAgainItem(): HTMLElement | null {
     document.querySelectorAll<HTMLElement>('[role="menuitem"],[role="menuitemradio"],[role="option"],button,a'),
   );
   return items.find((e) => isTryAgain(e.getAttribute('aria-label') || '', e.textContent || '')) ?? null;
-}
-
-/** A branch ‹/› arrow — identified by the `data-rtl-flip` marker on its icon. */
-export function isBranchArrow(b: Element): boolean {
-  return !!b.querySelector('svg[data-rtl-flip]');
-}
-
-/** Branch arrows within `container`, in DOM order — [prev, next]. */
-export function navArrowsIn(container: HTMLElement): HTMLButtonElement[] {
-  return buttonsIn(container).filter(isBranchArrow);
 }

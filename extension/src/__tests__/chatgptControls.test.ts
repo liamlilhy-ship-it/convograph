@@ -13,12 +13,22 @@ const btn = (o: Partial<BtnInfo>): BtnInfo => ({
   ...o,
 });
 
-// Toolbars modeled on the live DOM (verified en + zh).
+// Toolbars modeled on the live DOM (verified en + zh). The pre-Sept-2026 shape,
+// with the branch ‹ › arrows — still exercises the rtlFlip exclusion.
 const userToolbar = (edit: string, copy = 'copy message', prev = 'previous response', next = 'next response'): BtnInfo[] => [
   btn({ testid: 'copy-turn-action-button', label: copy }),
   btn({ label: edit }),
   btn({ rtlFlip: true, label: prev }),
   btn({ rtlFlip: true, label: next }),
+];
+
+// The Sept 2026 shape (verified live): the arrows are gone and a forked message
+// gets a "See versions" button (with a testid) BEFORE the pencil.
+const userToolbar2026 = (edit: string, versions = 'see versions'): BtnInfo[] => [
+  btn({ testid: 'variants-turn-action-button', label: versions }),
+  btn({ testid: 'copy-turn-action-button', label: 'copy message' }),
+  btn({ testid: 'share-prompt-link-turn-action-button', label: 'share prompt' }),
+  btn({ label: edit }),
 ];
 
 const answerToolbar = (sw: string, more = 'more actions'): BtnInfo[] => [
@@ -36,6 +46,10 @@ describe('pickEdit', () => {
   });
   it('finds it structurally on a Chinese UI (label is irrelevant to the rule)', () => {
     expect(pickEdit(userToolbar('编辑消息', '复制消息', '上一回复', '下一回复'))).toBe(1);
+  });
+  it('skips the "See versions" button on a forked message (Sept 2026 toolbar)', () => {
+    expect(pickEdit(userToolbar2026('edit message'))).toBe(3);
+    expect(pickEdit(userToolbar2026('编辑消息', '查看版本'))).toBe(3);
   });
   it('works with no branch arrows (single-branch message)', () => {
     expect(pickEdit([btn({ testid: 'copy-turn-action-button' }), btn({ label: '编辑消息' })])).toBe(1);

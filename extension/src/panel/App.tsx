@@ -347,15 +347,11 @@ export function App({ platform }: { platform: Platform }) {
       const conv = await platform.fetchConversation(convId);
       if (req !== reqRef.current) return;
       // On platforms that don't persist branch selection server-side (ChatGPT),
-      // the fetched leaf (current_node) is blind to the user's native `‹ ›` arrow
-      // switches — those change only the DOM. So read the active branch from the
-      // DOM and prefer it; this makes the highlight follow native branch switching,
-      // like Claude's does (Claude's fetched leaf already reflects the switch, so
-      // it omits detectActiveLeaf and this is skipped). Fall back to the branch the
-      // user last jumped to in-graph (which also drove the native arrows) when the
-      // DOM can't tell us (leaf virtualized out of a long chat), then the server's
-      // leaf. The MutationObserver-driven reload (watchConversation) already fires
-      // on an arrow click, so this re-highlights with no extra fetch.
+      // the branch shown in the chat is the truth — read the active leaf from the
+      // DOM and prefer it (Claude's fetched leaf already reflects its switch, so it
+      // omits detectActiveLeaf and this is skipped). Fall back to the branch the
+      // user last jumped to in-graph when the DOM can't tell us (leaf virtualized
+      // out of a long chat), then the server's leaf.
       if (!platform.capabilities.serverPersistsActiveBranch) {
         const leaf = platform.detectActiveLeaf?.(conv) ?? selectedLeafRef.current;
         if (leaf) conv.current_leaf_message_uuid = leaf;
@@ -504,6 +500,13 @@ export function App({ platform }: { platform: Platform }) {
       // — hidden behind the graph — scrolled to that branch for when you exit.
       const convId = platform.parseConversationId();
       if (!convId) return;
+      // No in-place branch switch on this platform (ChatGPT): an off-path message is
+      // never rendered in the chat, so show its already-fetched content in a floating
+      // preview instead. Claude (serverBranchSwitch: true) never enters this branch.
+      if (!platform.capabilities.serverBranchSwitch && !node.isOnActivePath) {
+        openPreview(node);
+        return;
+      }
       // In full-screen the chat is hidden, so its scroll won't stick — remember
       // this node so we replay the scroll when the user exits full-screen.
       if (fullscreenRef.current) fsJumpTargetRef.current = node;
@@ -523,7 +526,7 @@ export function App({ platform }: { platform: Platform }) {
       };
 
       if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-        // Already active, or read-only platform — just scroll the chat to it. The
+        // Already active — just scroll the chat to it. The
         // reveal step (ChatGPT's prompt rail) can take a few seconds, so show the
         // spinner while it runs. Claude has no revealNode → no spinner (unchanged).
         const spin = !!platform.revealNode;
@@ -554,7 +557,7 @@ export function App({ platform }: { platform: Platform }) {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load, platform],
+    [load, platform, openPreview],
   );
 
   // ---- Search across all branches (Claude only) ----
@@ -835,6 +838,8 @@ export function App({ platform }: { platform: Platform }) {
         platform.capabilities.regenerate,
       mediaOnlyNodes: mediaRich,
       fitHoverImage: mediaRich,
+      // Without an in-place branch switch, only the shown branch can be written to.
+      writesRequireActivePath: !platform.capabilities.serverBranchSwitch,
     };
   }, [platform]);
 

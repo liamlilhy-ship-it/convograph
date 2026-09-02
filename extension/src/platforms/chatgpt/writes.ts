@@ -7,14 +7,12 @@ import {
   getNormalizedConversation,
   invalidateConversation,
 } from './client';
-import { switchToLeaf } from './branchSwitch';
 import { revealUserMessage } from './promptRail';
 import { findEditButton, findRegenTrigger, findEditSendButton, findTryAgainItem } from './controls';
 
 /**
  * The ChatGPT write actions — edit a question, regenerate an answer, ask a
- * follow-up — implemented by DRIVING ChatGPT's own UI, the same philosophy as
- * branchSwitch.ts (which drives the native < n/m > arrows). ChatGPT's write API
+ * follow-up — implemented by DRIVING ChatGPT's own UI. ChatGPT's write API
  * is gated by an anti-bot proof-of-work, so we never call it; instead we click the
  * real controls and let ChatGPT do its own thing. The app's generic completion
  * flow (App.tsx `runCompletion`) awaits these, then refetches the graph — so each
@@ -39,13 +37,13 @@ import { findEditButton, findRegenTrigger, findEditSendButton, findTryAgainItem 
  *
  * Known limitations (best-effort, like click-to-jump):
  *   - A target must be MOUNTED. Active-path turns ChatGPT virtualized are revealed
- *     via the prompt rail; a message on a non-visible branch can't be reached —
- *     click the node first (which switches the branch), then act. Otherwise: a
- *     clear "couldn't reach" Error.
- *   - Follow-up appends to the VISIBLE branch tail; if the answer isn't already the
- *     tail we switch the branch to it SILENTLY first (the answer is always a leaf
- *     here — a mid-conversation answer is routed to edit, which branches a new
- *     question from it).
+ *     via the prompt rail; a message on a non-visible branch can't be reached at
+ *     all — ChatGPT no longer switches branches in place (Sept 2026), so the app
+ *     disables the write actions on off-branch nodes and these throw a clear
+ *     "couldn't reach" Error as the backstop.
+ *   - Follow-up appends to the VISIBLE branch tail, so the answer must already be
+ *     that tail (the answer is always a leaf here — a mid-conversation answer is
+ *     routed to edit, which branches a new question from it).
  *   - The answer streams live into the node: waitForGenerationComplete mirrors
  *     ChatGPT's streaming bubble text into `onDelta`. When generation finishes we
  *     read the new answer's id from the DOM and report it via `onStart`, so the app
@@ -144,7 +142,9 @@ async function ensureMounted(raw: ChatGptConversation, id: string): Promise<HTML
   await revealUserMessage(raw, id);
   el = msgEl(id);
   if (!el) {
-    throw new Error("Couldn't reach that message in the chat — open its branch, then try again.");
+    throw new Error(
+      "Couldn't reach that message in the chat — ChatGPT only shows its current branch, so only messages on it can be edited or regenerated.",
+    );
   }
   return el;
 }
@@ -382,22 +382,18 @@ function isVisibleTip(answerId: string): boolean {
 }
 
 async function doFollowup(
-  conv: NormalizedConversation,
-  raw: ChatGptConversation,
   answerId: string,
   prompt: string,
   signal?: AbortSignal,
   onDelta?: (text: string) => void,
 ): Promise<string | null> {
   // The composer continues the VISIBLE branch tip. The answer is always a leaf here
-  // (classifyCreate routes an answer that already has a follow-up to edit), so if it
-  // isn't already the tip we silently switch the chat to its branch — no prompt.
+  // (classifyCreate routes an answer that already has a follow-up to edit), and
+  // ChatGPT can't switch branches in place, so it must already be the tip.
   if (!isVisibleTip(answerId)) {
-    await switchToLeaf(conv, answerId, raw);
-    await wait(450);
-  }
-  if (!isVisibleTip(answerId)) {
-    throw new Error("Couldn't open that answer's branch — scroll to it in the chat, then try again.");
+    throw new Error(
+      "That answer isn't on ChatGPT's current branch — a follow-up can only continue the branch shown in the chat.",
+    );
   }
   const composer = findComposerEditable();
   if (!composer) throw new Error("Couldn't find ChatGPT's message box.");
@@ -436,7 +432,7 @@ export async function createCompletion(params: CompletionParams): Promise<void> 
   const answerId =
     action.kind === 'edit'
       ? await doEdit(raw, action.userId, prompt, signal, onDelta)
-      : await doFollowup(conv, raw, action.answerId, prompt, signal, onDelta);
+      : await doFollowup(action.answerId, prompt, signal, onDelta);
   if (answerId) onStart?.({ assistantUuid: answerId });
   invalidateConversation(convId);
 }

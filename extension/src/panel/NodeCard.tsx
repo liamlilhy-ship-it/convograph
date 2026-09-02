@@ -28,6 +28,9 @@ import { svgDataUri } from './widgetRender';
 // Fixed markdown font size for the in-place preview (the floating window's is
 // adjustable; the inline card's is intentionally fixed).
 const INLINE_PREVIEW_FS = 18;
+// Tooltip for a write action on a node the platform can't switch to (see
+// PlatformUI.writesRequireActivePath).
+const OFF_BRANCH_TIP = 'Only the branch shown in the chat can be edited — read this one in its preview';
 
 type HoverApi = {
   onPreview: (item: PreviewItem, rect: DOMRect) => void;
@@ -120,8 +123,12 @@ export function NodeCard({
   onRegenerate,
   style,
 }: NodeCardProps) {
-  const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes } = usePlatformUI();
+  const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes, writesRequireActivePath } =
+    usePlatformUI();
   const isHuman = node.role === 'human';
+  // The platform can't switch branches in place (ChatGPT), so a message off the
+  // shown branch can't be written to — disable its actions and say why.
+  const offBranch = !!writesRequireActivePath && !node.isOnActivePath;
   const p = node.preview;
   const text = p.bodyMd || (isHuman ? p.title : p.body || p.title);
   // Folded snippet renders as real markdown (same treatment as the expanded
@@ -196,12 +203,12 @@ export function NodeCard({
                   className="cg-pv-btn"
                   // aria-disabled (not `disabled`) keeps the element hoverable so the
                   // tooltip explaining the lock still shows; the click is guarded below.
-                  aria-disabled={locked || undefined}
-                  data-tip={locked ? lockReason : 'Edit question'}
+                  aria-disabled={locked || offBranch || undefined}
+                  data-tip={locked ? lockReason : offBranch ? OFF_BRANCH_TIP : 'Edit question'}
                   aria-label="Edit question"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (locked) return;
+                    if (locked || offBranch) return;
                     onStartEdit(node);
                   }}
                 >
@@ -211,12 +218,12 @@ export function NodeCard({
                   <button
                     type="button"
                     className="cg-pv-btn"
-                    aria-disabled={locked || undefined}
-                    data-tip={locked ? lockReason : 'Regenerate answer'}
+                    aria-disabled={locked || offBranch || undefined}
+                    data-tip={locked ? lockReason : offBranch ? OFF_BRANCH_TIP : 'Regenerate answer'}
                     aria-label="Regenerate answer"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (locked) return;
+                      if (locked || offBranch) return;
                       onRegenerate(node);
                     }}
                   >
@@ -228,12 +235,12 @@ export function NodeCard({
               <button
                 type="button"
                 className="cg-pv-btn"
-                aria-disabled={locked || undefined}
-                data-tip={locked ? lockReason : 'Ask follow-up'}
+                aria-disabled={locked || offBranch || undefined}
+                data-tip={locked ? lockReason : offBranch ? OFF_BRANCH_TIP : 'Ask follow-up'}
                 aria-label="Ask follow-up"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (locked) return;
+                  if (locked || offBranch) return;
                   onStartFollowup(node);
                 }}
               >

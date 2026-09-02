@@ -237,11 +237,10 @@ export async function jumpToNode(
     const centered = await scrollToNode(platform, node, budgetMs);
     return { ok: true, refreshed: false, centered };
   }
-  // Don't switch to a branch we couldn't switch back FROM (a ChatGPT image-only
-  // regenerate has no version arrows) — that would strand the user. Block it up
-  // front; the node's content is still readable via the graph preview.
-  if (platform.canSwitchToNode && !(await platform.canSwitchToNode(node))) {
-    return { ok: false, refreshed: false, error: "This branch can't be opened in ChatGPT's chat — view it in the preview." };
+  // setActiveLeaf is required whenever serverBranchSwitch is true, so this only
+  // guards a mis-declared platform.
+  if (!platform.setActiveLeaf) {
+    return { ok: false, refreshed: false, error: "This platform can't switch branches." };
   }
   try {
     await platform.setActiveLeaf(convId, node);

@@ -2,11 +2,9 @@ import type { Platform, ThemeName } from '../types';
 import {
   cachedRawConversation,
   getConversation,
-  getNormalizedConversation,
   parseConversationIdFromUrl,
   isSupportedSurface,
 } from './client';
-import { isReversiblySwitchable, switchToLeaf } from './branchSwitch';
 import { detectActiveLeafFromDom } from './activeLeaf';
 import { revealNodeViaRail } from './promptRail';
 import { createCompletion, retryCompletion } from './writes';
@@ -17,9 +15,14 @@ import tokensCss from './tokens.css?inline';
 /**
  * The ChatGPT platform. It fetches + normalizes the conversation so the graph,
  * hover/previews, and scroll-to-bubble work, and drives ChatGPT's native UI for
- * the write actions: branch switch (the < n/m > arrows, branchSwitch.ts) and
- * edit / follow-up / regenerate (writes.ts). There's no server-side write API we
- * call — every mutation is the faithful equivalent of a user clicking the page.
+ * the write actions edit / follow-up / regenerate (writes.ts). There's no
+ * server-side write API we call — every mutation is the faithful equivalent of a
+ * user clicking the page.
+ *
+ * No branch switching: since Sept 2026 ChatGPT has no in-place way to make an
+ * older branch the active one (the `< n/m >` pager was replaced by a read-only
+ * "See versions" modal whose only action forks a NEW chat). Off-active-path
+ * nodes are read in the extension's own preview instead (see NOTES.md).
  */
 
 function detectTheme(): ThemeName {
@@ -67,14 +70,17 @@ export const ChatGptPlatform: Platform = {
   siteName: 'chatgpt.com',
   hostnames: ['chatgpt.com', 'chat.openai.com'],
   assistantLabel: 'ChatGPT',
-  // Branch switching and content writes (edit/followup/regenerate) are driven on
-  // the native UI; branch selection is client-only (not persisted server-side, so
-  // serverPersistsActiveBranch stays false), but edit/followup/regenerate end in a
-  // real send that ChatGPT persists, after which the app refetches the graph.
-  // search is on: the backend fetch returns the FULL tree (every branch) up front,
-  // and search browses entirely on the graph (preview + highlight, no native-chat
-  // scroll), so ChatGPT's lazy-loaded DOM window doesn't limit it.
-  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: true },
+  // serverBranchSwitch is off: ChatGPT can't switch branches in place any more, so
+  // clicking an off-path node opens its preview and the write actions only work
+  // on the branch shown in the chat. Edit/followup/regenerate are driven on the
+  // native UI and end in a real send that ChatGPT persists, after which the app
+  // refetches the graph. serverPersistsActiveBranch stays false so the app keeps
+  // reading the shown branch from the DOM (detectActiveLeaf) rather than the
+  // fetched leaf. search is on: the backend fetch returns the FULL tree (every
+  // branch) up front, and search browses entirely on the graph (preview +
+  // highlight, no native-chat scroll), so ChatGPT's lazy-loaded DOM window
+  // doesn't limit it.
+  capabilities: { serverBranchSwitch: false, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: true },
   rootParentUuid: '',
   tokensCss,
   // ChatGPT's layer model (measured 2026-07): page content lives in root
@@ -90,25 +96,9 @@ export const ChatGptPlatform: Platform = {
 
   isSupportedSurface,
   fetchConversation: (convId) => getConversation(convId),
-  // ChatGPT's native arrows are client-only, so the active branch lives in the
-  // DOM, not the fetched conversation — read it from there (see activeLeaf.ts).
+  // The branch shown in the chat is the truth for what's active — read it from the
+  // DOM rather than trusting the fetched leaf (see activeLeaf.ts).
   detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
-  async setActiveLeaf(convId, node) {
-    const conv = await getNormalizedConversation(convId);
-    // Pass the raw conversation so switchToLeaf can reveal an off-window branch
-    // point's arrow control via the prompt rail before driving it.
-    const ok = await switchToLeaf(conv, node.leafId, cachedRawConversation(convId) ?? undefined);
-    if (!ok) throw new Error('Could not switch to that branch in ChatGPT');
-  },
-  // A regenerate branch whose answer is image-only has no version arrows, so it
-  // can't be switched back from — report it non-switchable so the app blocks the
-  // switch up front instead of stranding the user (see branchSwitch.ts).
-  async canSwitchToNode(node) {
-    const convId = parseConversationIdFromUrl();
-    if (!convId) return true;
-    const conv = await getNormalizedConversation(convId);
-    return isReversiblySwitchable(conv, node.leafId);
-  },
   // Reach a lazy-unloaded message via ChatGPT's prompt rail (see promptRail.ts).
   // Uses the RAW conversation (load() has cached it) so the prompt index matches
   // ChatGPT's own rail exactly — the normalized tree can drift by merged turns.

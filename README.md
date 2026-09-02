@@ -40,7 +40,7 @@ Open it from the **Convograph** pill next to the chat composer, or press **⌘/C
 | Platform | Hosts | Notes |
 | --- | --- | --- |
 | **claude.ai** | `claude.ai` | Full support. Branch switching persists server‑side, jump‑to‑message works for any message in the thread, and whole‑conversation search spans every branch. |
-| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize, branch‑switch, edit / follow‑up / regenerate via ChatGPT's native UI, and whole‑conversation search. Branch selection is local and re‑applied on reload. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first; search, though, reads the fetched tree, so it finds matches on every branch even when they're outside the chat's loaded window. |
+| **ChatGPT** | `chatgpt.com`, `chat.openai.com` | Visualize every branch, edit / follow‑up / regenerate on the current branch via ChatGPT's native UI, and whole‑conversation search. ChatGPT no longer switches branches in place (its "See versions" view is read‑only), so clicking a node on another branch opens it in Convograph's preview instead. Click‑to‑jump only reaches messages currently loaded in the chat — scroll older ones into view first; search, though, reads the fetched tree, so it finds matches on every branch even when they're outside the chat's loaded window. |
 
 ## Installation
 
