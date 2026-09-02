@@ -501,10 +501,11 @@ export function App({ platform }: { platform: Platform }) {
       const convId = platform.parseConversationId();
       if (!convId) return;
       // No in-place branch switch on this platform (ChatGPT): an off-path message is
-      // never rendered in the chat, so show its already-fetched content in a floating
-      // preview instead. Claude (serverBranchSwitch: true) never enters this branch.
+      // never rendered in the chat, so expand its already-fetched content in place on
+      // the canvas instead (click again to collapse). Claude (serverBranchSwitch:
+      // true) never enters this branch.
       if (!platform.capabilities.serverBranchSwitch && !node.isOnActivePath) {
-        openPreview(node);
+        toggleInlinePreview(node);
         return;
       }
       // In full-screen the chat is hidden, so its scroll won't stick — remember
@@ -557,7 +558,7 @@ export function App({ platform }: { platform: Platform }) {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load, platform, openPreview],
+    [load, platform, toggleInlinePreview],
   );
 
   // ---- Search across all branches (Claude only) ----
@@ -873,6 +874,9 @@ export function App({ platform }: { platform: Platform }) {
           role="complementary"
           aria-label="Conversation graph"
           data-fullscreen={fullscreen ? 'true' : 'false'}
+          // Styling hook: without an in-place branch switch (ChatGPT) every branch
+          // is read on the canvas, so off-path cards aren't dimmed (see panel.css).
+          data-branch-switch={platform.capabilities.serverBranchSwitch ? 'true' : 'false'}
           style={{ ['--cg-panel-w' as never]: `${panelW}px` }}
         >
           <div
@@ -930,7 +934,10 @@ export function App({ platform }: { platform: Platform }) {
           <div className="cg-toolbar cg-status-row">
             <span className="cg-status">
               {status.kind === 'loading' && 'Loading…'}
-              {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}
+              {status.kind === 'ready' &&
+                `${status.tree.orderedNodes.length} messages · ${
+                  platform.capabilities.serverBranchSwitch ? 'active path' : 'current branch'
+                } highlighted`}
               {status.kind === 'no-conversation' && 'Open a chat to see its tree'}
               {status.kind === 'error' && status.message}
             </span>

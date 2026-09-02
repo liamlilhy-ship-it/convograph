@@ -171,13 +171,15 @@ export function NodeCard({
       data-current-match={isCurrentMatch ? 'true' : 'false'}
       style={cardStyle}
       // Single click jumps to this message. In preview mode the body is for
-      // reading, so the header row (below) becomes the jump target instead.
+      // reading, so the header row (below) becomes the jump target instead. On a
+      // platform that can't switch to this branch, the click expands/collapses
+      // the card in place instead (App.handleNodeClick).
       onClick={isPreview ? undefined : () => onClick(node)}
     >
       <div
         className="cg-head"
         onClick={isPreview ? () => onClick(node) : undefined}
-        title={isPreview ? 'Jump to this message' : undefined}
+        title={isPreview ? (offBranch ? 'Collapse' : 'Jump to this message') : undefined}
       >
         <span className="cg-role">
           {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}

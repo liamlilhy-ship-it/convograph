@@ -276,6 +276,18 @@
 /* Cards off the active path are dimmed so the selected (active) path stands out.
    Hovering a dimmed card restores it to full strength to signal interactivity. */
 .cg-node[data-active="false"]:not(:hover) { opacity: 0.5; }
+/* Platforms with no in-place branch switch (ChatGPT, data-branch-switch="false"):
+   every branch is read right on the canvas, so off-path cards stay at full
+   strength. The current branch is then marked by a stronger accent ring and a
+   faint accent tint (plus its accent edges) instead of by dimming the rest. */
+.cg-panel[data-branch-switch="false"] .cg-node[data-active="false"]:not(:hover) { opacity: 1; }
+.cg-panel[data-branch-switch="false"] .cg-node[data-active="true"] {
+  box-shadow: 0 0 0 3px var(--cg-accent-soft), var(--cg-shadow);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--cg-accent) 7%, transparent),
+    color-mix(in srgb, var(--cg-accent) 7%, transparent)
+  );
+}
 .cg-node:hover {
   border-color: var(--cg-accent);
   transform: translateY(-1px);
