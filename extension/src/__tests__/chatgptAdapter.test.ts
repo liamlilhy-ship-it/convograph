@@ -234,3 +234,103 @@ describe('adapter rewrites `:::writing` compose fences into message_compose_v1 b
     expect(searchNodes(display.orderedNodes, 'hope you').length).toBe(1);
   });
 });
+
+/**
+ * A voice conversation (modeled on a real one: "签证问题咨询"): voice turns store
+ * the transcript as an `audio_transcription` OBJECT part under `multimodal_text`
+ * — no string parts at all — while typed turns in the same chat use plain string
+ * parts. Regression: the adapter used to keep only string parts, so every voice
+ * node came out empty and the whole conversation vanished from the graph.
+ */
+const voiceChat: ChatGptConversation = {
+  conversation_id: 'conv-4',
+  title: '签证问题咨询',
+  current_node: 'a2',
+  mapping: {
+    root: { id: 'root', parent: null, children: ['u1'], message: null },
+    u1: {
+      id: 'u1',
+      parent: 'root',
+      children: ['thoughts1'],
+      message: {
+        author: { role: 'user' },
+        create_time: 1,
+        content: {
+          content_type: 'multimodal_text',
+          parts: [{ content_type: 'audio_transcription', text: '我想问一下签证的问题', direction: 'in' }],
+        },
+        metadata: {},
+      },
+    },
+    // Reasoning node between the turns, as in the real conversation.
+    thoughts1: {
+      id: 'thoughts1',
+      parent: 'u1',
+      children: ['a1'],
+      message: {
+        author: { role: 'assistant' },
+        create_time: 2,
+        content: { content_type: 'thoughts' },
+        metadata: { is_visually_hidden_from_conversation: true },
+      },
+    },
+    a1: {
+      id: 'a1',
+      parent: 'thoughts1',
+      children: ['u2'],
+      message: {
+        author: { role: 'assistant' },
+        create_time: 3,
+        content: {
+          content_type: 'multimodal_text',
+          parts: [{ content_type: 'audio_transcription', text: '当然可以，你想了解哪一类签证?', direction: 'out' }],
+        },
+        metadata: { model_slug: 'gpt-4o' },
+      },
+    },
+    // A TYPED follow-up in the same chat (string part) — must keep working.
+    u2: {
+      id: 'u2',
+      parent: 'a1',
+      children: ['a2'],
+      message: {
+        author: { role: 'user' },
+        create_time: 4,
+        content: { content_type: 'text', parts: ['H1B转H4需要多久?'] },
+      },
+    },
+    a2: {
+      id: 'a2',
+      parent: 'u2',
+      children: [],
+      message: {
+        author: { role: 'assistant' },
+        create_time: 5,
+        content: { content_type: 'text', parts: ['通常几周到几个月不等。'] },
+        metadata: { model_slug: 'gpt-4o' },
+      },
+    },
+  },
+};
+
+describe('adapter reads voice-mode audio_transcription parts', () => {
+  const conv = adaptChatGptConversation(voiceChat, 'conv-4');
+
+  it('keeps every voice turn, with the transcript as the node text', () => {
+    const ids = conv.chat_messages.map((m) => m.uuid).sort();
+    expect(ids).toEqual(['a1', 'a2', 'u1', 'u2']);
+    const textOf = (id: string) =>
+      conv.chat_messages.find((m) => m.uuid === id)!.content.map((c) => c.text).join('');
+    expect(textOf('u1')).toBe('我想问一下签证的问题');
+    expect(textOf('a1')).toBe('当然可以，你想了解哪一类签证?');
+    // Typed turns in the same chat are untouched.
+    expect(textOf('u2')).toBe('H1B转H4需要多久?');
+    expect(textOf('a2')).toBe('通常几周到几个月不等。');
+  });
+
+  it('builds a full display tree (nothing filtered), searchable by transcript', () => {
+    const display = buildDisplayTree(buildTree(conv));
+    expect(display.orderedNodes.length).toBe(4);
+    expect(searchNodes(display.orderedNodes, '签证').length).toBeGreaterThan(0);
+  });
+});

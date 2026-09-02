@@ -49,7 +49,18 @@ function extractText(m?: ChatGptMessage | null): string {
   const c = m?.content;
   if (!c) return '';
   if (Array.isArray(c.parts)) {
-    return stripRefTokens(c.parts.filter((p): p is string => typeof p === 'string').join('\n')).trim();
+    const runs = c.parts.map((p) => {
+      if (typeof p === 'string') return p;
+      // Voice-mode turns store the transcript as an object part (a voice chat
+      // has NO string parts at all — without this its nodes come out empty
+      // and the whole conversation vanishes from the graph).
+      if (p && (p as { content_type?: string }).content_type === 'audio_transcription') {
+        const t = (p as { text?: unknown }).text;
+        return typeof t === 'string' ? t : '';
+      }
+      return ''; // other object parts (e.g. images) are handled by extractMedia
+    });
+    return stripRefTokens(runs.filter(Boolean).join('\n')).trim();
   }
   if (typeof c.text === 'string') return stripRefTokens(c.text).trim();
   return '';

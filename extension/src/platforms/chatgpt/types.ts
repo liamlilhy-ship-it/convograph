@@ -46,6 +46,15 @@ export type ChatGptContentReference = {
   images?: ChatGptRefImage[];
 };
 
+/** A voice-mode turn's transcript. Voice chats store BOTH sides' speech as these
+ *  object parts — with NO string parts at all — so the adapter must read `.text`
+ *  or voice conversations come out empty. `direction`: 'in' = user, 'out' = model. */
+export type ChatGptAudioPart = {
+  content_type: 'audio_transcription';
+  text?: string;
+  direction?: string;
+};
+
 export type ChatGptMessage = {
   id?: string;
   author?: { role?: string };
@@ -53,9 +62,9 @@ export type ChatGptMessage = {
   content?: {
     content_type?: string;
     /** Interleaved text + media. Text parts are strings; media parts are objects
-     *  (e.g. `image_asset_pointer`). The adapter joins strings and extracts the
-     *  objects it understands. */
-    parts?: Array<string | ChatGptImagePart | { content_type?: string }>;
+     *  (e.g. `image_asset_pointer`, `audio_transcription`). The adapter joins
+     *  strings + transcripts and extracts the media objects it understands. */
+    parts?: Array<string | ChatGptImagePart | ChatGptAudioPart | { content_type?: string }>;
     text?: string;
   };
   /** Who the message is addressed to: 'all' = user-facing; a tool name
