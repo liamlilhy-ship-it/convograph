@@ -58,8 +58,10 @@ snaps it back). Removed entirely; `serverBranchSwitch: false`.
   again to collapse) — the "hybrid" preview fallback deferred above, adopted
   because it is the only way to read that branch. Active-path clicks scroll as
   before. Off-path cards are NOT dimmed here (`.cg-panel[data-branch-switch=
-  "false"]` in panel.css): every branch is equally readable, so the current
-  branch is marked by a stronger accent ring + tint and its accent edges.
+  "false"]` in panel.css) and keep their question/answer colours: every branch
+  is equally readable, so the current branch is marked by its PATH — solid
+  accent edges, while every other connector is dashed grey (user's choice over a
+  card tint / bolder border / "current" chip).
 - Edit / regenerate / follow-up only work on the branch shown in the chat; their
   buttons render disabled with a tooltip on off-branch nodes
   (`PlatformUI.writesRequireActivePath`), and writes.ts throws an honest error as
