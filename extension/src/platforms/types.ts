@@ -29,8 +29,10 @@ export type RetryParams = Omit<CompletionParams, 'prompt'>;
 /** What write operations a platform supports. The app hides/disables UI for any
  *  capability that's off, so a read-only platform degrades cleanly. */
 export type PlatformCapabilities = {
-  /** Can clicking a node switch the active branch (Claude: current_leaf PUT;
-   *  ChatGPT: drives the native < / > arrows)? When false, a click only scrolls. */
+  /** Can clicking an off-active-path node make its branch the active one (Claude:
+   *  current_leaf PUT)? When false (ChatGPT — no in-place switch exists since its
+   *  Sept 2026 "See versions" modal), a click on an off-path node opens the node's
+   *  preview instead, and the write actions only work on the active branch. */
   serverBranchSwitch: boolean;
   /** Does the platform persist the active branch server-side (Claude: yes — a
    *  re-fetch reflects the switch)? When false (ChatGPT — branch selection is
@@ -105,26 +107,20 @@ export interface Platform {
   /** Fetch + normalize the conversation (each provider does its own auth). */
   fetchConversation(convId: string): Promise<NormalizedConversation>;
   /** Read the active branch's leaf from the page DOM, for platforms whose server
-   *  does NOT persist branch selection (ChatGPT — its native `‹ ›` arrows change
-   *  only the DOM, so the fetched leaf can't see the switch). Returns the leaf
-   *  node id, or null when it can't be determined (DOM not rendered / virtualized).
-   *  Optional: platforms whose fetch already reflects the active branch (Claude)
-   *  omit it, and the app uses the fetched leaf. */
+   *  does NOT persist branch selection (ChatGPT — the branch shown in the chat is
+   *  the truth). Returns the leaf node id, or null when it can't be determined
+   *  (DOM not rendered / virtualized). Optional: platforms whose fetch already
+   *  reflects the active branch (Claude) omit it, and the app uses the fetched
+   *  leaf. */
   detectActiveLeaf?(conv: NormalizedConversation): string | null;
-  /** Switch the active branch to the node's leaf. Only called when
-   *  `capabilities.serverBranchSwitch` is true. */
-  setActiveLeaf(convId: string, node: DisplayNode): Promise<void>;
+  /** Switch the active branch to the node's leaf. Required when
+   *  `capabilities.serverBranchSwitch` is true; omitted otherwise. */
+  setActiveLeaf?(convId: string, node: DisplayNode): Promise<void>;
   /** Bring a node's message into the DOM when the platform has lazy-unloaded it
    *  (ChatGPT — via its prompt-navigation rail). Returns true if it's now
    *  rendered/visible. Optional: platforms that keep the whole thread mounted
    *  (Claude) don't implement it, and click-to-jump falls back to best-effort. */
   revealNode?(node: DisplayNode): Promise<boolean>;
-  /** Whether switching to this node's branch is safe (reversible). ChatGPT can't
-   *  switch back from an image-only regenerate (no version arrows), so such a
-   *  branch is reported non-switchable and the app blocks the switch rather than
-   *  stranding the user. Optional: platforms without the limitation omit it (always
-   *  switchable). Only consulted for off-active-path nodes. */
-  canSwitchToNode?(node: DisplayNode): Promise<boolean>;
   createCompletion(params: CompletionParams): Promise<void>;
   retryCompletion(params: RetryParams): Promise<void>;
   detectTheme(): ThemeName;

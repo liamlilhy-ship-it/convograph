@@ -347,15 +347,11 @@ export function App({ platform }: { platform: Platform }) {
       const conv = await platform.fetchConversation(convId);
       if (req !== reqRef.current) return;
       // On platforms that don't persist branch selection server-side (ChatGPT),
-      // the fetched leaf (current_node) is blind to the user's native `‹ ›` arrow
-      // switches — those change only the DOM. So read the active branch from the
-      // DOM and prefer it; this makes the highlight follow native branch switching,
-      // like Claude's does (Claude's fetched leaf already reflects the switch, so
-      // it omits detectActiveLeaf and this is skipped). Fall back to the branch the
-      // user last jumped to in-graph (which also drove the native arrows) when the
-      // DOM can't tell us (leaf virtualized out of a long chat), then the server's
-      // leaf. The MutationObserver-driven reload (watchConversation) already fires
-      // on an arrow click, so this re-highlights with no extra fetch.
+      // the branch shown in the chat is the truth — read the active leaf from the
+      // DOM and prefer it (Claude's fetched leaf already reflects its switch, so it
+      // omits detectActiveLeaf and this is skipped). Fall back to the branch the
+      // user last jumped to in-graph when the DOM can't tell us (leaf virtualized
+      // out of a long chat), then the server's leaf.
       if (!platform.capabilities.serverPersistsActiveBranch) {
         const leaf = platform.detectActiveLeaf?.(conv) ?? selectedLeafRef.current;
         if (leaf) conv.current_leaf_message_uuid = leaf;
@@ -497,11 +493,12 @@ export function App({ platform }: { platform: Platform }) {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open, fullscreen, platform, searchOpen]);
 
-  const handleNodeClick = useCallback(
+  // Jump to a node's message in the chat: switch the active branch if needed
+  // (Claude) and scroll to it. Works in full-screen too: the branch switch updates
+  // the graph's active-path highlight and leaves the native chat — hidden behind
+  // the graph — scrolled to that branch for when you exit.
+  const jumpToMessage = useCallback(
     async (node: DisplayNode) => {
-      // Click-to-jump works in full-screen too: it switches the active branch
-      // (updating the graph's active-path highlight) and leaves the native chat
-      // — hidden behind the graph — scrolled to that branch for when you exit.
       const convId = platform.parseConversationId();
       if (!convId) return;
       // In full-screen the chat is hidden, so its scroll won't stick — remember
@@ -523,7 +520,7 @@ export function App({ platform }: { platform: Platform }) {
       };
 
       if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
-        // Already active, or read-only platform — just scroll the chat to it. The
+        // Already active — just scroll the chat to it. The
         // reveal step (ChatGPT's prompt rail) can take a few seconds, so show the
         // spinner while it runs. Claude has no revealNode → no spinner (unchanged).
         const spin = !!platform.revealNode;
@@ -555,6 +552,17 @@ export function App({ platform }: { platform: Platform }) {
       void load();
     },
     [load, platform],
+  );
+
+  // A card click jumps (Claude) — or, on a platform that can't switch branches
+  // in place (ChatGPT), expands/collapses the card on the canvas; there the jump
+  // is a separate button on current-branch cards (NodeCard, PlatformUI.nodeClick).
+  const handleNodeClick = useCallback(
+    (node: DisplayNode) => {
+      if (platform.capabilities.serverBranchSwitch) void jumpToMessage(node);
+      else toggleInlinePreview(node);
+    },
+    [platform, jumpToMessage, toggleInlinePreview],
   );
 
   // ---- Search across all branches (Claude only) ----
@@ -835,6 +843,11 @@ export function App({ platform }: { platform: Platform }) {
         platform.capabilities.regenerate,
       mediaOnlyNodes: mediaRich,
       fitHoverImage: mediaRich,
+      // Without an in-place branch switch, a card click expands it on the canvas
+      // (a jump button covers current-branch cards) and only the shown branch can
+      // be written to.
+      nodeClick: platform.capabilities.serverBranchSwitch ? 'jump' : 'expand',
+      writesRequireActivePath: !platform.capabilities.serverBranchSwitch,
     };
   }, [platform]);
 
@@ -868,6 +881,9 @@ export function App({ platform }: { platform: Platform }) {
           role="complementary"
           aria-label="Conversation graph"
           data-fullscreen={fullscreen ? 'true' : 'false'}
+          // Styling hook: without an in-place branch switch (ChatGPT) every branch
+          // is read on the canvas, so off-path cards aren't dimmed (see panel.css).
+          data-branch-switch={platform.capabilities.serverBranchSwitch ? 'true' : 'false'}
           style={{ ['--cg-panel-w' as never]: `${panelW}px` }}
         >
           <div
@@ -925,7 +941,10 @@ export function App({ platform }: { platform: Platform }) {
           <div className="cg-toolbar cg-status-row">
             <span className="cg-status">
               {status.kind === 'loading' && 'Loading…'}
-              {status.kind === 'ready' && `${status.tree.orderedNodes.length} messages · active path highlighted`}
+              {status.kind === 'ready' &&
+                `${status.tree.orderedNodes.length} messages · ${
+                  platform.capabilities.serverBranchSwitch ? 'active path' : 'current branch'
+                } highlighted`}
               {status.kind === 'no-conversation' && 'Open a chat to see its tree'}
               {status.kind === 'error' && status.message}
             </span>
@@ -935,6 +954,7 @@ export function App({ platform }: { platform: Platform }) {
               tree={status.tree}
               direction={direction}
               onNodeClick={handleNodeClick}
+              onJump={jumpToMessage}
               onOpenPreview={openPreview}
               onOpenMedia={openMedia}
               previewIds={previewIds}

@@ -57,6 +57,7 @@ type CgNodeData = {
   onPreview: (item: PreviewItem, r: DOMRect) => void;
   onPreviewEnd: () => void;
   onClick: (n: DisplayNode) => void;
+  onJump: (n: DisplayNode) => void;
   onOpenPreview: (n: DisplayNode) => void;
   onOpenMedia: (item: FooterItem) => void;
   onTogglePreview: (n: DisplayNode) => void;
@@ -152,6 +153,7 @@ const NODE_TYPES = {
         onPreview={data.onPreview}
         onPreviewEnd={data.onPreviewEnd}
         onClick={data.onClick}
+        onJump={data.onJump}
         onOpenPreview={data.onOpenPreview}
         onOpenMedia={data.onOpenMedia}
         onTogglePreview={data.onTogglePreview}
@@ -375,6 +377,9 @@ export type GraphCanvasProps = {
   tree: DisplayTree;
   direction?: LayoutDirection;
   onNodeClick: (node: DisplayNode) => void;
+  /** Scroll the chat to the node's message (the per-card jump button, shown on
+   *  platforms where a card click expands instead of jumping). */
+  onJump: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
   onOpenMedia: (item: FooterItem) => void;
   previewIds: Set<string>;
@@ -410,6 +415,7 @@ export function GraphCanvas({
   tree,
   direction = 'TB',
   onNodeClick,
+  onJump,
   onOpenPreview,
   onOpenMedia,
   previewIds,
@@ -619,6 +625,7 @@ export function GraphCanvas({
             onPreview: handlePreview,
             onPreviewEnd: handlePreviewEnd,
             onClick: onNodeClick,
+            onJump,
             onOpenPreview,
             onOpenMedia,
             onTogglePreview: onToggleInlinePreview,
@@ -628,7 +635,7 @@ export function GraphCanvas({
           } satisfies CgNodeData,
         } as Node;
       });
-  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, currentMatchOccurrence, handlePreview, handlePreviewEnd, onNodeClick, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
+  }, [laid, isTB, targetPos, sourcePos, tree, previewIds, locked, lockReason, jumpingId, searchActive, searchQuery, matchIds, currentMatchId, currentMatchOccurrence, handlePreview, handlePreviewEnd, onNodeClick, onJump, onOpenPreview, onOpenMedia, onToggleInlinePreview, onStartEdit, onStartFollowup, onRegenerate]);
 
   // ---- The floating draft nodes (question + streaming answer) ----
   // Re-map on each streamed token (cheap object creation, no dagre).

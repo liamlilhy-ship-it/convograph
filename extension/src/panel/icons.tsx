@@ -275,6 +275,17 @@ export function FitViewIcon(p: IconProps) {
   );
 }
 
+/** Arrow into a bracket — scroll the chat to this message. */
+export function JumpIcon(p: IconProps) {
+  return (
+    <svg {...svgProps(p)}>
+      <path d="M8.5 2h2.5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8.5" />
+      <path d="M2 7h7" />
+      <path d="M6.5 4.5L9 7l-2.5 2.5" />
+    </svg>
+  );
+}
+
 /** Crosshair/target glyph — recenters the canvas on the most recent message. */
 export function CenterIcon(p: IconProps) {
   return (

@@ -24,6 +24,17 @@ export type PlatformUI = {
    *  stay on-screen) instead of the fixed-size hover box. For platforms with large
    *  or portrait images. Default (Claude): unchanged fixed-size hover. */
   fitHoverImage?: boolean;
+  /** What a click on a node card does. 'jump' (default, Claude): scroll the chat
+   *  to the message, switching the active branch first if needed. 'expand'
+   *  (platforms that can't switch branches in place — ChatGPT): expand/collapse
+   *  the card's preview on the canvas; current-branch cards then carry a
+   *  separate jump button that scrolls the chat to the message. */
+  nodeClick?: 'jump' | 'expand';
+  /** Write actions (edit / regenerate / follow-up) only work on the active branch
+   *  because the platform can't switch branches in place (ChatGPT) — the buttons
+   *  on off-branch nodes render disabled with an explanatory tooltip. Default
+   *  (Claude): undefined → unchanged. */
+  writesRequireActivePath?: boolean;
 };
 
 const DEFAULT: PlatformUI = {
