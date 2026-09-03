@@ -493,21 +493,14 @@ export function App({ platform }: { platform: Platform }) {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open, fullscreen, platform, searchOpen]);
 
-  const handleNodeClick = useCallback(
+  // Jump to a node's message in the chat: switch the active branch if needed
+  // (Claude) and scroll to it. Works in full-screen too: the branch switch updates
+  // the graph's active-path highlight and leaves the native chat — hidden behind
+  // the graph — scrolled to that branch for when you exit.
+  const jumpToMessage = useCallback(
     async (node: DisplayNode) => {
-      // Click-to-jump works in full-screen too: it switches the active branch
-      // (updating the graph's active-path highlight) and leaves the native chat
-      // — hidden behind the graph — scrolled to that branch for when you exit.
       const convId = platform.parseConversationId();
       if (!convId) return;
-      // No in-place branch switch on this platform (ChatGPT): an off-path message is
-      // never rendered in the chat, so expand its already-fetched content in place on
-      // the canvas instead (click again to collapse). Claude (serverBranchSwitch:
-      // true) never enters this branch.
-      if (!platform.capabilities.serverBranchSwitch && !node.isOnActivePath) {
-        toggleInlinePreview(node);
-        return;
-      }
       // In full-screen the chat is hidden, so its scroll won't stick — remember
       // this node so we replay the scroll when the user exits full-screen.
       if (fullscreenRef.current) fsJumpTargetRef.current = node;
@@ -558,7 +551,18 @@ export function App({ platform }: { platform: Platform }) {
       // Re-fetch so the graph's active-path highlight follows the jump.
       void load();
     },
-    [load, platform, toggleInlinePreview],
+    [load, platform],
+  );
+
+  // A card click jumps (Claude) — or, on a platform that can't switch branches
+  // in place (ChatGPT), expands/collapses the card on the canvas; there the jump
+  // is a separate button on current-branch cards (NodeCard, PlatformUI.nodeClick).
+  const handleNodeClick = useCallback(
+    (node: DisplayNode) => {
+      if (platform.capabilities.serverBranchSwitch) void jumpToMessage(node);
+      else toggleInlinePreview(node);
+    },
+    [platform, jumpToMessage, toggleInlinePreview],
   );
 
   // ---- Search across all branches (Claude only) ----
@@ -839,7 +843,10 @@ export function App({ platform }: { platform: Platform }) {
         platform.capabilities.regenerate,
       mediaOnlyNodes: mediaRich,
       fitHoverImage: mediaRich,
-      // Without an in-place branch switch, only the shown branch can be written to.
+      // Without an in-place branch switch, a card click expands it on the canvas
+      // (a jump button covers current-branch cards) and only the shown branch can
+      // be written to.
+      nodeClick: platform.capabilities.serverBranchSwitch ? 'jump' : 'expand',
       writesRequireActivePath: !platform.capabilities.serverBranchSwitch,
     };
   }, [platform]);
@@ -947,6 +954,7 @@ export function App({ platform }: { platform: Platform }) {
               tree={status.tree}
               direction={direction}
               onNodeClick={handleNodeClick}
+              onJump={jumpToMessage}
               onOpenPreview={openPreview}
               onOpenMedia={openMedia}
               previewIds={previewIds}

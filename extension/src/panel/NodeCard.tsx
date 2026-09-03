@@ -19,6 +19,7 @@ import {
   EditIcon,
   FollowUpIcon,
   SendIcon,
+  JumpIcon,
 } from './icons';
 import { usePlatformUI } from './platformUI';
 import { type PreviewItem } from './HoverPreview';
@@ -83,6 +84,9 @@ export type NodeCardProps = HoverApi & {
   /** Tooltip shown on the disabled action buttons explaining the lock. */
   lockReason?: string;
   onClick: (node: DisplayNode) => void;
+  /** Scroll the chat to this message — the header jump button, rendered only when
+   *  the platform's card click expands instead of jumping (PlatformUI.nodeClick). */
+  onJump: (node: DisplayNode) => void;
   onOpenPreview: (node: DisplayNode) => void;
   /** Open a footer attachment (document / image / widget / file) in a floating
    *  preview window. */
@@ -115,6 +119,7 @@ export function NodeCard({
   onPreview,
   onPreviewEnd,
   onClick,
+  onJump,
   onOpenPreview,
   onOpenMedia,
   onTogglePreview,
@@ -123,9 +128,13 @@ export function NodeCard({
   onRegenerate,
   style,
 }: NodeCardProps) {
-  const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes, writesRequireActivePath } =
+  const { assistantLabel, AssistantIcon, showActions, mediaOnlyNodes, nodeClick, writesRequireActivePath } =
     usePlatformUI();
   const isHuman = node.role === 'human';
+  // A card click expands the card instead of jumping (ChatGPT); the jump is then
+  // a header button, offered only where it can work — on the shown branch.
+  const expandOnClick = nodeClick === 'expand';
+  const showJump = expandOnClick && node.isOnActivePath;
   // The platform can't switch branches in place (ChatGPT), so a message off the
   // shown branch can't be written to — disable its actions and say why.
   const offBranch = !!writesRequireActivePath && !node.isOnActivePath;
@@ -170,16 +179,16 @@ export function NodeCard({
       data-match={isMatch ? 'true' : 'false'}
       data-current-match={isCurrentMatch ? 'true' : 'false'}
       style={cardStyle}
-      // Single click jumps to this message. In preview mode the body is for
-      // reading, so the header row (below) becomes the jump target instead. On a
-      // platform that can't switch to this branch, the click expands/collapses
-      // the card in place instead (App.handleNodeClick).
+      // Single click jumps to this message — or, where the platform's card click
+      // expands instead (App.handleNodeClick), toggles the in-place preview. In
+      // preview mode the body is for reading, so the header row (below) becomes
+      // the click target instead.
       onClick={isPreview ? undefined : () => onClick(node)}
     >
       <div
         className="cg-head"
         onClick={isPreview ? () => onClick(node) : undefined}
-        title={isPreview ? (offBranch ? 'Collapse' : 'Jump to this message') : undefined}
+        title={isPreview ? (expandOnClick ? 'Collapse' : 'Jump to this message') : undefined}
       >
         <span className="cg-role">
           {isHuman ? <UserIcon size={12} /> : <AssistantIcon size={12} />}
@@ -197,6 +206,20 @@ export function NodeCard({
           </span>
         )}
         <div className="cg-head-actions">
+          {showJump && (
+            <button
+              type="button"
+              className="cg-pv-btn"
+              data-tip="Jump to this message in the chat"
+              aria-label="Jump to this message in the chat"
+              onClick={(e) => {
+                e.stopPropagation();
+                onJump(node);
+              }}
+            >
+              <JumpIcon size={15} />
+            </button>
+          )}
           {showActions &&
             (isHuman ? (
               <>

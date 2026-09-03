@@ -54,10 +54,11 @@ Driving the old arrows (`branchSwitch.ts`) had degraded to a silent false succes
 snaps it back). Removed entirely; `serverBranchSwitch: false`.
 
 **Behavior now:**
-- Clicking an off-active-path node expands it in place on the canvas (click
-  again to collapse) — the "hybrid" preview fallback deferred above, adopted
-  because it is the only way to read that branch. Active-path clicks scroll as
-  before. Off-path cards are NOT dimmed here (`.cg-panel[data-branch-switch=
+- Clicking ANY node expands it in place on the canvas (click again to collapse;
+  `PlatformUI.nodeClick === 'expand'`) — the "hybrid" preview fallback deferred
+  above, adopted because it is the only way to read an off-path branch, and
+  applied to every card so the click means one thing. Current-branch cards carry
+  a separate header "Jump to this message in the chat" button (scroll-only). Off-path cards are NOT dimmed here (`.cg-panel[data-branch-switch=
   "false"]` in panel.css): every branch is equally readable, so instead of
   fading, off-branch cards sit on neutral grey surfaces (`--cg-node-q/a-
   inactive-bg` in tokens.css, grey top rule, muted role label) while
