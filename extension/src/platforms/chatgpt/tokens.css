@@ -23,10 +23,11 @@
   --cg-node-a-bg: rgba(255, 255, 255, 0.72);
   /* Off-branch card surfaces (ChatGPT can't switch branches, so these cards are
      read in place): the same Q/A pairing drained only slightly toward grey — a
-     faint grey-green wash for questions, off-white for answers — so they read
+     paler, slightly softer green wash for questions (still clearly green),
+     off-white for answers — so they read
      as "not the current branch" without looking disabled; the grey top rule
      and muted role label (panel.css) carry the rest of the cue. */
-  --cg-node-q-inactive-bg: rgba(237, 242, 240, 0.80);
+  --cg-node-q-inactive-bg: rgba(233, 246, 240, 0.72);
   --cg-node-a-inactive-bg: rgba(246, 246, 246, 0.78);
   --cg-shadow: 0 6px 24px rgba(13, 13, 13, 0.08);
   /* Liquid-glass surface for the entry pill: translucent neutral-white tint +
@@ -65,7 +66,7 @@
   --cg-find-soft: rgba(106, 163, 255, 0.28);
   --cg-node-q-bg: rgba(28, 58, 46, 0.78);
   --cg-node-a-bg: rgba(42, 42, 42, 0.72);
-  --cg-node-q-inactive-bg: rgba(33, 48, 42, 0.78);
+  --cg-node-q-inactive-bg: rgba(30, 52, 43, 0.72);
   --cg-node-a-inactive-bg: rgba(37, 37, 37, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-glass-bg: rgba(47, 47, 47, 0.16);
