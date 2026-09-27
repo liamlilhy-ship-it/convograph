@@ -8,6 +8,7 @@
  */
 import { type SettingChangedMsg, type Settings, type SettingsRequest } from './lib/settings';
 import { readSettings, writeSetting } from './lib/settingsStore';
+import { sendInstallEvent } from './lib/analytics';
 
 const CHAT_HOSTS = ['https://claude.ai/*', 'https://chatgpt.com/*', 'https://chat.openai.com/*'];
 
@@ -45,3 +46,14 @@ chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse) => {
 
 // The MV3 worker restarts on demand — re-sync the badge on every boot.
 void readSettings().then((s) => reflectState(s.pillHidden));
+
+// First install only — never on update or chrome_update. Opens the site's
+// post-install page (its GA4 tag counts the view, attributed to whatever brought
+// the visitor to the site) and sends the consent-independent backup ping.
+const WELCOME_URL = 'https://convograph-site.vercel.app/welcome';
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason !== 'install') return;
+  const { version } = chrome.runtime.getManifest();
+  void chrome.tabs.create({ url: `${WELCOME_URL}?reason=install&v=${version}` });
+  void sendInstallEvent(version);
+});
