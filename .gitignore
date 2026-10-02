@@ -21,3 +21,6 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# Local-only notes (never committed or built)
+*.local.md
