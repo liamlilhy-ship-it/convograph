@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Convograph: Turn AI chat into tree diagram (Claude, ChatGPT)",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Visualize claude.ai and ChatGPT conversations as a tree of branches. Hover to preview, click to jump.",
   "host_permissions": ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"],
   "background": {
