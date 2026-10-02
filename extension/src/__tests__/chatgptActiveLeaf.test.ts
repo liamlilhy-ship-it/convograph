@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   activeLeafFromRenderedIds,
+  allOnPathTo,
   extendThroughOnlyChildren,
 } from '../platforms/chatgpt/activeLeaf';
 
@@ -66,5 +67,35 @@ describe('extendThroughOnlyChildren', () => {
 
   it('returns the leaf unchanged when it has no children', () => {
     expect(extendThroughOnlyChildren('a2', children)).toBe('a2');
+  });
+});
+
+describe('allOnPathTo', () => {
+  // u1 → a1 → u2 → a2 → u3 → a3, with a second version of the 2nd question
+  // (u2b → a2b) branching off a1.
+  const parents = new Map<string, string | null>([
+    ['u1', null],
+    ['a1', 'u1'],
+    ['u2', 'a1'],
+    ['a2', 'u2'],
+    ['u3', 'a2'],
+    ['a3', 'u3'],
+    ['u2b', 'a1'],
+    ['a2b', 'u2b'],
+  ]);
+
+  it('is true when the rendered window sits anywhere on the branch', () => {
+    // After a jump to the first question ChatGPT mounts only the early turns —
+    // they still agree with the server's leaf (a3), so it must stand.
+    expect(allOnPathTo(['u1', 'a1', 'u2'], 'a3', parents)).toBe(true);
+    expect(allOnPathTo(['u3', 'a3'], 'a3', parents)).toBe(true);
+  });
+
+  it('is false when a rendered turn is on another branch', () => {
+    expect(allOnPathTo(['u1', 'a1', 'u2b', 'a2b'], 'a3', parents)).toBe(false);
+  });
+
+  it('is false when the leaf is unknown to the tree', () => {
+    expect(allOnPathTo(['u1'], 'gone', parents)).toBe(false);
   });
 });

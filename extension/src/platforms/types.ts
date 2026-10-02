@@ -117,7 +117,7 @@ export interface Platform {
    *  `capabilities.serverBranchSwitch` is true; omitted otherwise. */
   setActiveLeaf?(convId: string, node: DisplayNode): Promise<void>;
   /** Bring a node's message into the DOM when the platform has lazy-unloaded it
-   *  (ChatGPT — via its prompt-navigation rail). Returns true if it's now
+   *  (ChatGPT — via its own message deep link). Returns true if it's now
    *  rendered/visible. Optional: platforms that keep the whole thread mounted
    *  (Claude) don't implement it, and click-to-jump falls back to best-effort. */
   revealNode?(node: DisplayNode): Promise<boolean>;

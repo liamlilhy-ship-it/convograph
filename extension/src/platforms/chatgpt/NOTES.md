@@ -2,6 +2,14 @@
 
 ## Decision: click-to-jump on long chats — "keep current" (2026-06-05)
 
+> **Superseded 2026-10-02.** The Sept 2026 shell renamed every hook below
+> (`data-testid="conversation-turn-N"`, `data-message-id`) and only mounts the
+> last 5 turns on load, but it also gave us the permalink this section was
+> waiting for: `/c/<id>?messageId=<msgId>`, the link ChatGPT's sidebar search
+> uses. Applied in place from the MAIN world it loads and scrolls to any message
+> in ~1–2s, so click-to-jump now reaches unrendered messages (`reveal.ts`,
+> `selectors.ts`). The rest of this section is history.
+
 **Behavior:** Clicking a graph node scrolls the live ChatGPT chat to that message
 **only when ChatGPT has it rendered** (its recent sliding window of turns). For an
 older/unrendered message, the jump does nothing — no toast, no scroll-jank. The

@@ -233,10 +233,13 @@ function lruSet(id: string, raw: ChatGptConversation): void {
   while (rawCache.size > MAX_CACHED) rawCache.delete(rawCache.keys().next().value as string);
 }
 
-// (B) Token bucket: allow a small burst, then ~1 fetch / REFILL_MS. The endpoint
-// tolerates ~3 per ~36s, so ~1 per 13s stays comfortably under a rolling window.
+// (B) Token bucket: allow a small burst, then ~1 fetch / REFILL_MS. This used to
+// be 1 per 13s (for the ~3 per ~36s limit above), which made every chat after
+// the third wait up to 13s for its graph. Re-measured live 2026-10-02: 4
+// back-to-back then 1 per ~5s, and separately 8 at 1 per 3s, all returned 200
+// (26 requests in 114s, no 429) — so 1 per 4s stays inside what was verified.
 const BUCKET_CAP = 3;
-const REFILL_MS = 13_000;
+const REFILL_MS = 4_000;
 let tokens = BUCKET_CAP;
 let lastRefill = nowMs();
 

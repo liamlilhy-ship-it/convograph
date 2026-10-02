@@ -187,7 +187,7 @@ async function scrollToNode(platform: Platform, node: DisplayNode, budgetMs = 40
   }
 
   // (c) platform reveal: bring a lazy-unloaded message into the DOM (ChatGPT drives
-  // its prompt-navigation rail). Runs regardless of the poll budget — it's the real
+  // its own message deep link). Runs regardless of the poll budget — it's the real
   // fallback for off-window messages. Platforms without it (Claude) skip this.
   if (!find() && platform.revealNode) {
     const revealed = await platform.revealNode(node);
@@ -231,7 +231,7 @@ export async function jumpToNode(
   // Already the active branch, or no server-side switch available? Just scroll.
   if (node.isOnActivePath || !platform.capabilities.serverBranchSwitch) {
     // Short in-place poll for a platform that can't scroll-search (ChatGPT); if the
-    // bubble isn't already rendered, scrollToNode's reveal step (the prompt rail)
+    // bubble isn't already rendered, scrollToNode's reveal step (its deep link)
     // brings it in. Claude keeps the full budget for its scroll-search.
     const budgetMs = platform.dom.scrollSearch === false ? 700 : undefined;
     const centered = await scrollToNode(platform, node, budgetMs);
@@ -251,7 +251,7 @@ export async function jumpToNode(
   // switch (ChatGPT) has already applied itself, so there's nothing to refresh.
   const refreshed = platform.capabilities.serverPersistsActiveBranch ? await requestRefresh() : true;
   // Short poll for ChatGPT (the branch just switched); scrollToNode's reveal step
-  // then drives the prompt rail to the now-active target if it isn't rendered.
+  // then reveals the now-active target if it isn't rendered.
   const centered = await scrollToNode(platform, node, platform.dom.scrollSearch === false ? 700 : undefined);
   return { ok: true, refreshed, centered };
 }
