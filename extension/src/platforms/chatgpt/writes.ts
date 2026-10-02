@@ -7,7 +7,7 @@ import {
   getNormalizedConversation,
   invalidateConversation,
 } from './client';
-import { revealUserMessage } from './promptRail';
+import { revealMessage } from './reveal';
 import { findEditButton, findRegenTrigger, findEditSendButton, findTryAgainItem } from './controls';
 
 /**
@@ -37,7 +37,7 @@ import { findEditButton, findRegenTrigger, findEditSendButton, findTryAgainItem 
  *
  * Known limitations (best-effort, like click-to-jump):
  *   - A target must be MOUNTED. Active-path turns ChatGPT virtualized are revealed
- *     via the prompt rail; a message on a non-visible branch can't be reached at
+ *     via its deep link; a message on a non-visible branch can't be reached at
  *     all — ChatGPT no longer switches branches in place (Sept 2026), so the app
  *     disables the write actions on off-branch nodes and these throw a clear
  *     "couldn't reach" Error as the backstop.
@@ -135,11 +135,11 @@ export function classifyCreate(conv: NormalizedConversation, parentMessageUuid: 
 // ---- DOM driving ----------------------------------------------------------
 
 /** Ensure the message `id` is in the DOM, revealing an active-path virtualized
- *  turn via the prompt rail. Throws if it can't be reached. */
-async function ensureMounted(raw: ChatGptConversation, id: string): Promise<HTMLElement> {
+ *  turn (reveal.ts). Throws if it can't be reached. */
+async function ensureMounted(_raw: ChatGptConversation, id: string): Promise<HTMLElement> {
   let el = msgEl(id);
   if (el) return el;
-  await revealUserMessage(raw, id);
+  await revealMessage(id);
   el = msgEl(id);
   if (!el) {
     throw new Error(

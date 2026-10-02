@@ -1,32 +1,21 @@
 import type { PlatformDom } from '../types';
+import { liveThread, turnEl, userBubbles } from './selectors';
 
 /**
- * ChatGPT DOM hooks (best-effort for read-only v1 — used only for scroll-to-bubble
- * and anchoring the toggle). ChatGPT marks user turns with
- * `[data-message-author-role="user"]` and the composer is `#prompt-textarea`.
+ * ChatGPT DOM hooks (scroll-to-bubble and anchoring the toggle). The thread
+ * lookups live in selectors.ts.
  */
 export const chatgptDom: PlatformDom = {
   findScroller() {
-    // The scroll container is an ANCESTOR of <main> (main itself is
-    // overflow:visible — verified live). Walk up to the nearest overflow-y
-    // auto/scroll element; fall back to main.
-    const main = document.querySelector<HTMLElement>('main');
-    if (!main) return null;
-    let el = main.parentElement;
-    while (el && el !== document.body) {
-      const oy = getComputedStyle(el).overflowY;
-      if (oy === 'auto' || oy === 'scroll') return el;
-      el = el.parentElement;
-    }
-    return main;
+    return liveThread();
   },
   findQuestionBubbles() {
-    return Array.from(document.querySelectorAll<HTMLElement>('[data-message-author-role="user"]'));
+    return userBubbles();
   },
   findBubbleByNodeId(id) {
-    // A turn's normalized id equals its `data-message-id` in the DOM, so we can
-    // locate the bubble directly — works for image-only turns that have no text.
-    return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
+    // A question's node id is its turn's `data-turn-key`, so we can locate the
+    // turn directly — works for image-only turns that have no text.
+    return turnEl(id);
   },
   findComposer() {
     // An in-app navigation leaves the previous chats mounted but hidden, each
@@ -59,7 +48,8 @@ export const chatgptDom: PlatformDom = {
       el.checkVisibility(),
     );
   },
-  // ChatGPT lazy-loads history (only the few most recent messages are in the
-  // DOM) and a programmatic scroll won't fetch older ones — so don't scroll-search.
+  // ChatGPT lazy-loads history (only the few most recent turns are in the DOM),
+  // so don't scroll-search — an unrendered message is reached through
+  // platform.revealNode (reveal.ts) instead.
   scrollSearch: false,
 };

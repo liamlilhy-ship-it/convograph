@@ -1,12 +1,7 @@
 import type { Platform, ThemeName } from '../types';
-import {
-  cachedRawConversation,
-  getConversation,
-  parseConversationIdFromUrl,
-  isSupportedSurface,
-} from './client';
+import { getConversation, parseConversationIdFromUrl, isSupportedSurface } from './client';
 import { detectActiveLeafFromDom } from './activeLeaf';
-import { revealNodeViaRail } from './promptRail';
+import { revealMessage } from './reveal';
 import { createCompletion, retryCompletion } from './writes';
 import { chatgptDom } from './dom';
 import { resolveTheme } from '../theme';
@@ -99,16 +94,8 @@ export const ChatGptPlatform: Platform = {
   // The branch shown in the chat is the truth for what's active — read it from the
   // DOM rather than trusting the fetched leaf (see activeLeaf.ts).
   detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
-  // Reach a lazy-unloaded message via ChatGPT's prompt rail (see promptRail.ts).
-  // Uses the RAW conversation (load() has cached it) so the prompt index matches
-  // ChatGPT's own rail exactly — the normalized tree can drift by merged turns.
-  async revealNode(node) {
-    const convId = parseConversationIdFromUrl();
-    if (!convId) return false;
-    const raw = cachedRawConversation(convId);
-    if (!raw) return false;
-    return revealNodeViaRail(raw, node);
-  },
+  // Reach a message ChatGPT hasn't rendered, via its own deep link (see reveal.ts).
+  revealNode: (node) => revealMessage(node.humanId),
   createCompletion,
   retryCompletion,
   detectTheme,
