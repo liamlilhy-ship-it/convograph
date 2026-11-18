@@ -6,16 +6,17 @@ import { ChatGptPlatform } from '../platforms/chatgpt/platform';
 // platform can't silently alter the other's behavior (the app gates every
 // branch-switch / write path on these flags).
 describe('platform capabilities', () => {
-  it('Claude keeps server-side branch switching (unchanged contract)', () => {
+  it('Claude declares no branch switch (no in-place switch exists since Nov 2026)', () => {
     expect(ClaudePlatform.capabilities).toEqual({
-      serverBranchSwitch: true,
-      serverPersistsActiveBranch: true,
+      serverBranchSwitch: false,
+      serverPersistsActiveBranch: false,
       edit: true,
       followup: true,
       regenerate: true,
       search: true,
     });
-    expect(typeof ClaudePlatform.setActiveLeaf).toBe('function');
+    expect(ClaudePlatform.setActiveLeaf).toBeUndefined();
+    expect(typeof ClaudePlatform.detectActiveLeaf).toBe('function');
   });
 
   it('ChatGPT declares no branch switch (no in-place switch exists since Sept 2026)', () => {

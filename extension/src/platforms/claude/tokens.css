@@ -17,6 +17,10 @@
      already blurred, so no per-node backdrop-filter is needed). */
   --cg-node-q-bg: rgba(248, 230, 219, 0.80);
   --cg-node-a-bg: rgba(255, 255, 255, 0.72);
+  /* Off-branch card surfaces (the chat can't switch branches, so these cards are
+     read in place): the same Q/A pairing drained slightly toward grey. */
+  --cg-node-q-inactive-bg: rgba(243, 238, 234, 0.80);
+  --cg-node-a-inactive-bg: rgba(247, 246, 243, 0.78);
   --cg-shadow: 0 6px 24px rgba(31, 30, 29, 0.10);
   /* Liquid-glass surface for the entry pill: translucent warm-white tint (Claude's
      beige family) + specular top highlight + hover wash; combined with
@@ -56,6 +60,8 @@
   --cg-find-soft: rgba(69, 200, 163, 0.30);
   --cg-node-q-bg: rgba(72, 45, 35, 0.78);
   --cg-node-a-bg: rgba(38, 37, 36, 0.72);
+  --cg-node-q-inactive-bg: rgba(50, 44, 41, 0.78);
+  --cg-node-a-inactive-bg: rgba(40, 39, 38, 0.72);
   --cg-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --cg-glass-bg: rgba(38, 37, 36, 0.16);
   --cg-glass-highlight: rgba(255, 255, 255, 0.30);

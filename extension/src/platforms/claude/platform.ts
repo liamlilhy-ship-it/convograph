@@ -1,7 +1,8 @@
 import type { Platform, ThemeName } from '../types';
-import { getOrgId, getConversationTree, setCurrentLeaf, parseConversationIdFromUrl, isSupportedSurface } from './client';
+import { getOrgId, getConversationTree, parseConversationIdFromUrl, isSupportedSurface } from './client';
 import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './chatClient';
 import { claudeDom } from './dom';
+import { detectActiveLeafFromDom } from './activeLeaf';
 import { resolveTheme } from '../theme';
 import tokensCss from './tokens.css?inline';
 
@@ -56,7 +57,12 @@ export const ClaudePlatform: Platform = {
   siteName: 'claude.ai',
   hostnames: ['claude.ai'],
   assistantLabel: 'Claude',
-  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: true, edit: true, followup: true, regenerate: true, search: true },
+  // No branch switching: since Nov 2026 claude.ai has no in-place way to show an
+  // older branch (its version arrows are gone, and the chat no longer follows the
+  // server's current leaf — see activeLeaf.ts). So, like ChatGPT, a click on an
+  // off-branch node opens its preview, the write actions only work on the branch
+  // shown in the chat, and the shown branch is read from the DOM.
+  capabilities: { serverBranchSwitch: false, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: true },
   rootParentUuid: ROOT_PARENT_UUID,
   tokensCss,
   // claude.ai's layer scale (measured 2026-07): header 10, sidebar 20, tooltips
@@ -74,11 +80,7 @@ export const ClaudePlatform: Platform = {
     return getConversationTree(await orgId(), convId);
   },
 
-  async setActiveLeaf(convId, node) {
-    // The target leaf is the node's concrete childless descendant — the API
-    // rejects a leaf that still has children.
-    await setCurrentLeaf(await orgId(), convId, node.leafId);
-  },
+  detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
 
   async createCompletion({ convId, parentMessageUuid, prompt, signal, onDelta, onStart }) {
     await createCompletion({ orgId: await orgId(), convId, parentMessageUuid, prompt, signal, onDelta, onStart });
