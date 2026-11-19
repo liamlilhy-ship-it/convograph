@@ -1,6 +1,6 @@
 import type { Platform, ThemeName } from '../types';
 import { getOrgId, getConversationTree, parseConversationIdFromUrl, isSupportedSurface } from './client';
-import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './chatClient';
+import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './writes';
 import { claudeDom } from './dom';
 import { detectActiveLeafFromDom } from './activeLeaf';
 import { resolveTheme } from '../theme';
@@ -8,11 +8,8 @@ import tokensCss from './tokens.css?inline';
 
 /**
  * The claude.ai platform — a thin wiring shim that points the `Platform`
- * interface at the existing claude.ai client/chatClient/dom/tokens. It holds NO
- * behavioral logic of its own; every method calls a pre-existing function with
- * the same arguments it had before the platform split, so claude.ai behaves
- * exactly as it did. The only addition is caching the org id here (it used to
- * live in App's `orgIdRef`).
+ * interface at the claude.ai client/writes/dom/tokens. It holds no behavioral
+ * logic of its own beyond caching the org id.
  */
 
 // Cache the org id for the page session, re-fetching only if a prior fetch
@@ -82,13 +79,13 @@ export const ClaudePlatform: Platform = {
 
   detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
 
-  async createCompletion({ convId, parentMessageUuid, prompt, signal, onDelta, onStart }) {
-    await createCompletion({ orgId: await orgId(), convId, parentMessageUuid, prompt, signal, onDelta, onStart });
+  // Writes drive claude.ai's own controls (see writes.ts); the tree tells an edit
+  // from a follow-up.
+  async createCompletion(params) {
+    await createCompletion(await getConversationTree(await orgId(), params.convId), params);
   },
 
-  async retryCompletion({ convId, parentMessageUuid, signal, onDelta, onStart }) {
-    await retryCompletion({ orgId: await orgId(), convId, parentMessageUuid, signal, onDelta, onStart });
-  },
+  retryCompletion,
 
   detectTheme,
   applySidePanelInset,
