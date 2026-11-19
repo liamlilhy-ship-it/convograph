@@ -1,17 +1,15 @@
 import type { Platform, ThemeName } from '../types';
-import { getOrgId, getConversationTree, setCurrentLeaf, parseConversationIdFromUrl, isSupportedSurface } from './client';
-import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './chatClient';
+import { getOrgId, getConversationTree, parseConversationIdFromUrl, isSupportedSurface } from './client';
+import { createCompletion, retryCompletion, ROOT_PARENT_UUID } from './writes';
 import { claudeDom } from './dom';
+import { detectActiveLeafFromDom } from './activeLeaf';
 import { resolveTheme } from '../theme';
 import tokensCss from './tokens.css?inline';
 
 /**
  * The claude.ai platform — a thin wiring shim that points the `Platform`
- * interface at the existing claude.ai client/chatClient/dom/tokens. It holds NO
- * behavioral logic of its own; every method calls a pre-existing function with
- * the same arguments it had before the platform split, so claude.ai behaves
- * exactly as it did. The only addition is caching the org id here (it used to
- * live in App's `orgIdRef`).
+ * interface at the claude.ai client/writes/dom/tokens. It holds no behavioral
+ * logic of its own beyond caching the org id.
  */
 
 // Cache the org id for the page session, re-fetching only if a prior fetch
@@ -56,7 +54,12 @@ export const ClaudePlatform: Platform = {
   siteName: 'claude.ai',
   hostnames: ['claude.ai'],
   assistantLabel: 'Claude',
-  capabilities: { serverBranchSwitch: true, serverPersistsActiveBranch: true, edit: true, followup: true, regenerate: true, search: true },
+  // No branch switching: since Nov 2026 claude.ai has no in-place way to show an
+  // older branch (its version arrows are gone, and the chat no longer follows the
+  // server's current leaf — see activeLeaf.ts). So, like ChatGPT, a click on an
+  // off-branch node opens its preview, the write actions only work on the branch
+  // shown in the chat, and the shown branch is read from the DOM.
+  capabilities: { serverBranchSwitch: false, serverPersistsActiveBranch: false, edit: true, followup: true, regenerate: true, search: true },
   rootParentUuid: ROOT_PARENT_UUID,
   tokensCss,
   // claude.ai's layer scale (measured 2026-07): header 10, sidebar 20, tooltips
@@ -74,19 +77,15 @@ export const ClaudePlatform: Platform = {
     return getConversationTree(await orgId(), convId);
   },
 
-  async setActiveLeaf(convId, node) {
-    // The target leaf is the node's concrete childless descendant — the API
-    // rejects a leaf that still has children.
-    await setCurrentLeaf(await orgId(), convId, node.leafId);
+  detectActiveLeaf: (conv) => detectActiveLeafFromDom(conv),
+
+  // Writes drive claude.ai's own controls (see writes.ts); the tree tells an edit
+  // from a follow-up.
+  async createCompletion(params) {
+    await createCompletion(await getConversationTree(await orgId(), params.convId), params);
   },
 
-  async createCompletion({ convId, parentMessageUuid, prompt, signal, onDelta, onStart }) {
-    await createCompletion({ orgId: await orgId(), convId, parentMessageUuid, prompt, signal, onDelta, onStart });
-  },
-
-  async retryCompletion({ convId, parentMessageUuid, signal, onDelta, onStart }) {
-    await retryCompletion({ orgId: await orgId(), convId, parentMessageUuid, signal, onDelta, onStart });
-  },
+  retryCompletion,
 
   detectTheme,
   applySidePanelInset,

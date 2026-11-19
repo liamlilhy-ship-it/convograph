@@ -26,7 +26,15 @@ export const claudeDom: PlatformDom = {
       'div[contenteditable="true"][role="textbox"], textarea[role="textbox"]',
     );
     if (!editable) return null;
-    return editable.closest('form, fieldset, div[class*="composer"]') ?? editable;
+    // Prefer the whole composer box. Since Nov 2026 the editor's own row also
+    // carries a "composer" class, so the class match alone lands on that inner
+    // row (inside the box) and the pill overlaps the input — keep it as a
+    // last resort only.
+    return (
+      editable.closest<HTMLElement>('[data-cds="ChatComposer"], form, fieldset') ??
+      editable.closest<HTMLElement>('div[class*="composer"]') ??
+      editable
+    );
   },
   scrollTopMargin: 56,
 };
